@@ -323,6 +323,7 @@ wxString wxvbamApp::GetAbsolutePath(wxString path)
 
 bool wxvbamApp::OnInit() {
     using_wayland = IsWayland();
+    SetAppearance(Appearance::System);
 
     // use consistent names for config, DO NOT TRANSLATE
     SetAppName("visualboyadvance-m");

@@ -20,7 +20,7 @@ body:
   - type: markdown
     attributes:
       value: |
-            Please try to troubleshoot using the information on this page:h ttps://wiki.archlinux.org/index.php/Gamepad **BEFORE** filing an issue. 
+            Please try to troubleshoot using the information on this page: https://wiki.archlinux.org/index.php/Gamepad **BEFORE** filing an issue. 
             We use SDL for joystick support, any problems will generally be an issue with SDL and **NOT** the emulator.
             If relevant, the joystick you are using and the drivers you are using for it:          
   - type: textarea
@@ -46,7 +46,7 @@ body:
     attributes:
       label: Steps to reproduce the problem
       description: "How do you trigger this bug? Please walk us through it step by step."
-      value: |
+      placeholder: |
             1.
             2.
             3.
@@ -81,29 +81,76 @@ body:
             Clean, Intro'd or Hacked?:(Attach Patch here)
     validations:
       required: false
-  - type: textarea
-    id: Settings
+  - type: markdown
     attributes:
-      label: What settings are you using?
-      description: "Please list them"
-      value: |
-            Video driver (simple, opengl):
-            Sound driver (directsound, xaudio, openal, SDL):
-            Scale Filter Used?:
+      value: "### Emulator Settings\nList the settings you are using."
+  - type: input
+    id: Video_Driver
+    attributes:
+      label: Video Driver
+      description: "Specify which video driver you're using (e.g., Simple, OpenGL)."
     validations:
       required: true
-  - type: textarea
-    id: SysInfo
+  - type: input
+    id: Sound_Driver
     attributes:
-      label: Specifications and Build details
-      description: "List your system information, you can obtain this from MSINFO32 and the emulators Titlebar."
-      value: |
-            VBA-M: (include commit version number and whether you are using the 32-bit or 64-bit version)
-            OS: (include version and OS build number using WinVer if on Windows):
-            If using Linux, specify if using xorg or Wayland:
-            CPU:
-            GPU:
-            RAM:
+      label: Sound Driver
+      description: "Specify which sound driver you're using (e.g., DirectSound, XAudio, OpenAL, SDL)."
+    validations:
+      required: true
+  - type: input
+    id: Scale_Filter
+    attributes:
+      label: Scale Filter
+      description: "Specify which scale filter you are using."
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "### Specifications and Build Details\nList your system information, you can obtain this from MSINFO32 and the emulator's Titlebar."
+  - type: input
+    id: VBA-M
+    attributes:
+      label: VBA-M Version
+      description: "Include commit version number and whether you are using the 32-bit or 64-bit version."
+    validations:
+      required: true
+  - type: input
+    id: OS
+    attributes:
+      label: Operating System
+      description: "Include version and OS build number using WinVer if on Windows."
+    validations:
+      required: true
+  - type: dropdown
+    id: Linux_Display_Server
+    attributes:
+      label: Linux Display Server
+      description: "Specify whether using Xorg or Wayland."
+      options:
+        - Xorg
+        - Wayland
+    validations:
+      required: false
+  - type: input
+    id: CPU
+    attributes:
+      label: CPU Model
+      description: "Provide details of your CPU model."
+    validations:
+      required: true
+  - type: input
+    id: GPU
+    attributes:
+      label: GPU Model
+      description: "Provide details of your GPU model."
+    validations:
+      required: true
+  - type: input
+    id: RAM
+    attributes:
+      label: RAM Size
+      description: "Specify the amount of RAM installed."
     validations:
       required: true
   - type: checkboxes

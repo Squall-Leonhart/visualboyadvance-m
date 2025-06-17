@@ -65,8 +65,12 @@ std::vector<VBamIoVec> g_vbamIoVecs;
 
 void ResetMBC3RTC() {
     time(&gbDataMBC3.mapperLastTime);
-    struct tm* lt;
+    struct tm* lt = NULL;
+#if __STDC_WANT_SECURE_LIB__
+    localtime_s(lt, &gbDataMBC3.mapperLastTime);
+#else
     lt = localtime(&gbDataMBC3.mapperLastTime);
+#endif
     gbDataMBC3.mapperSeconds = lt->tm_sec;
     gbDataMBC3.mapperMinutes = lt->tm_min;
     gbDataMBC3.mapperHours = lt->tm_hour;
@@ -79,8 +83,12 @@ void ResetTama5RTC() {
     uint8_t gbDaysinMonth[12] = {31, 28, 31, 30, 31, 30,
                                  31, 31, 30, 31, 30, 31};
     time(&gbDataTAMA5.mapperLastTime);
-    struct tm* lt;
+    struct tm* lt = NULL;
+#if __STDC_WANT_SECURE_LIB__
+    localtime_s(lt, &gbDataTAMA5.mapperLastTime);
+#else
     lt = localtime(&gbDataTAMA5.mapperLastTime);
+#endif
     gbDataTAMA5.mapperSeconds = lt->tm_sec;
     gbDataTAMA5.mapperMinutes = lt->tm_min;
     gbDataTAMA5.mapperHours = lt->tm_hour;
@@ -111,7 +119,12 @@ void ResetTama5RTC() {
 
 void ResetHuc3RTC() {
     time(&gbRTCHuC3.mapperLastTime);
+#if __STDC_WANT_SECURE_LIB__
+    struct tm* lt = NULL;
+    localtime_s(lt, &gbRTCHuC3.mapperLastTime);
+#else
     localtime(&gbRTCHuC3.mapperLastTime);
+#endif
 }
 
 bool WriteBatteryFile(const char* file_name) {
@@ -151,7 +164,7 @@ bool ReadBatteryFile(const char* file_name) {
     bool ret = true;
     int total_read = 0;
     for (const VBamIoVec& vec : g_vbamIoVecs) {
-        const int sizeToRead = vec.length;
+        const int sizeToRead = (const int)vec.length;
         const int sizeToReadWithLeeway = sizeToRead + vec.leeway;
         const int read = gzread(gzFile, vec.data, sizeToRead);
         total_read += read;
@@ -185,7 +198,7 @@ bool ReadBatteryFile(const char* file_name) {
 
     // Check if the battery file is larger than expected.
     uint8_t data = 0;
-    const int read = gzread(gzFile, &data, 1);
+    const int read = (const int)gzread(gzFile, &data, 1);
     total_read += read;
     if (read != 0) {
         systemMessage(
@@ -276,7 +289,7 @@ void gbGenFilter() {
                                     b) -
                          4;
                 gbColorFilter[(b << 10) | (g << 5) | r] =
-                    (nb << 10) | (ng << 5) | nr;
+                    (uint16_t)((nb << 10) | (ng << 5) | nr);
             }
         }
     }
@@ -1280,10 +1293,10 @@ void gbDoHdma()
         gbHdmaSource = 0xa000;
 
     register_HDMA2 = gbHdmaSource & 0xff;
-    register_HDMA1 = gbHdmaSource >> 8;
+    register_HDMA1 = (uint8_t)(gbHdmaSource >> 8);
 
     register_HDMA4 = gbHdmaDestination & 0xff;
-    register_HDMA3 = gbHdmaDestination >> 8;
+    register_HDMA3 = (uint8_t)(gbHdmaDestination >> 8);
 
     gbHdmaBytes -= 0x10;
     gbMemory[0xff55] = --register_HDMA5;
@@ -1807,7 +1820,7 @@ void gbWriteMemory(uint16_t address, uint8_t value)
         int source = value * 0x0100;
 
         gbCopyMemory(0xfe00,
-            source,
+            (uint16_t)source,
             0xa0);
         gbMemory[0xff46] = register_DMA = value;
         return;
@@ -2053,7 +2066,7 @@ void gbWriteMemory(uint16_t address, uint8_t value)
             if (gbMemory[0xff68] & 0x80) {
                 int index = ((gbMemory[0xff68] & 0x3f) + 1) & 0x3f;
 
-                gbMemory[0xff68] = (gbMemory[0xff68] & 0x80) | index;
+                gbMemory[0xff68] = (uint8_t)((gbMemory[0xff68] & 0x80) | index);
                 gbMemory[0xff69] = (index & 1 ? (gbPalette[index >> 1] >> 8) : (gbPalette[index >> 1] & 0x00ff));
             }
             return;
@@ -2093,7 +2106,7 @@ void gbWriteMemory(uint16_t address, uint8_t value)
             if (gbMemory[0xff6a] & 0x80) {
                 int index = ((gbMemory[0xff6a] & 0x3f) + 1) & 0x3f;
 
-                gbMemory[0xff6a] = (gbMemory[0xff6a] & 0x80) | index;
+                gbMemory[0xff6a] = (uint8_t)((gbMemory[0xff6a] & 0x80) | index);
 
                 gbMemory[0xff6b] = (index & 1 ? (gbPalette[(index >> 1) + 32] >> 8) : (gbPalette[(index >> 1) + 32] & 0x00ff));
             }
@@ -2227,7 +2240,7 @@ uint8_t gbReadMemory(uint16_t address)
                 if (!(joystate & 16))
                     b |= 0x01;
 
-                gbMemory[0xff00] = b;
+                gbMemory[0xff00] = (uint8_t)b;
             } else if ((b & 0x30) == 0x10) {
                 b &= 0xf0;
 
@@ -2260,7 +2273,7 @@ uint8_t gbReadMemory(uint16_t address)
                 if (!(joystate & 1))
                     b |= 0x01;
 
-                gbMemory[0xff00] = b;
+                gbMemory[0xff00] = (uint8_t)b;
             } else {
                 if (gbSgbMode && gbSgbMultiplayer) {
                     gbMemory[0xff00] = 0xf0 | gbSgbNextController;
@@ -2633,13 +2646,13 @@ static void gbSelectColorizationPalette()
                 // No idea how that works. But it works.
                 for (size_t i = idx - 0x41, j = 0; i < sizeof(gbColorizationDisambigChars); i += 14, j += 14) {
                     if (gbRom[0x0137] == gbColorizationDisambigChars[i]) {
-                        infoIdx = idx + j;
+                        infoIdx = (int)(idx + j);
                         break;
                     }
                 }
             } else {
                 // Lower indexes just use the index from the checksum list.
-                infoIdx = idx;
+                infoIdx = (int)idx;
             }
         }
     }
@@ -3054,7 +3067,7 @@ void gbReset()
     }
 
     for (i = 0; i < 4; i++)
-        gbBgp[i] = gbObp0[i] = gbObp1[i] = i;
+        gbBgp[i] = gbObp0[i] = gbObp1[i] = (uint8_t)i;
 
     memset(&gbDataMBC1, 0, sizeof(gbDataMBC1));
     gbDataMBC1.mapperROMBank = 1;
@@ -3311,8 +3324,8 @@ static bool gbWriteSaveState(gzFile gzFile)
 
     if (g_gbCartData.HasRam()) {
         const size_t ramSize = g_gbCartData.ram_size();
-        utilWriteInt(gzFile, ramSize);
-        utilGzWrite(gzFile, gbRam, ramSize);
+        utilWriteInt(gzFile, (int)ramSize);
+        utilGzWrite(gzFile, gbRam, (int)ramSize);
     }
 
     if (gbCgbMode) {
@@ -3497,21 +3510,21 @@ static bool gbReadSaveState(gzFile gzFile)
         const size_t ram_size = g_gbCartData.ram_size();
         if (version < 11)
             if (coreOptions.skipSaveGameBattery) {
-                utilGzSeek(gzFile, ram_size, SEEK_CUR); //skip
+                utilGzSeek(gzFile, (long)ram_size, SEEK_CUR); //skip
             } else {
-                utilGzRead(gzFile, gbRam, ram_size); //read
+                utilGzRead(gzFile, gbRam, (long)ram_size); //read
             }
         else {
             const size_t stateRamSize = utilReadInt(gzFile);
             if (coreOptions.skipSaveGameBattery) {
                 // Skip over the save game RAM.
-                utilGzSeek(gzFile, std::min(ram_size, stateRamSize), SEEK_CUR);
+                utilGzSeek(gzFile, (long)std::min(ram_size, stateRamSize), SEEK_CUR);
             } else {
                 // Ovewrite the save game RAM.
-                utilGzRead(gzFile, gbRam, std::min(ram_size, stateRamSize));
+                utilGzRead(gzFile, gbRam, (long)std::min(ram_size, stateRamSize));
             }
             if (stateRamSize > ram_size) {
-                utilGzSeek(gzFile, stateRamSize - ram_size, SEEK_CUR);
+                utilGzSeek(gzFile, (long)(stateRamSize - ram_size), SEEK_CUR);
             }
         }
     }
@@ -3690,7 +3703,7 @@ static bool gbReadSaveState(gzFile gzFile)
         gbTimerOnChange = (utilReadInt(gzFile) ? true : false);
         gbHardware = utilReadInt(gzFile);
         gbBlackScreen = (utilReadInt(gzFile) ? true : false);
-        oldRegister_WY = utilReadInt(gzFile);
+        oldRegister_WY = (uint8_t)utilReadInt(gzFile);
         gbWindowLine = utilReadInt(gzFile);
         inUseRegister_WY = utilReadInt(gzFile);
         gbScreenOn = (utilReadInt(gzFile) ? true : false);
@@ -3887,6 +3900,41 @@ int gbGetNextEvent(int _clockTicks)
 void gbDrawLine()
 {
     switch (systemColorDepth) {
+    case 8: {
+#ifdef __LIBRETRO__
+        uint8_t* dest = (uint8_t*)g_pix + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
+            + gbBorderColumnSkip;
+#else
+        uint8_t* dest = (uint8_t*)g_pix + (gbBorderLineSkip + 2) * (register_LY + gbBorderRowSkip + 1)
+            + gbBorderColumnSkip;
+#endif
+        for (size_t x = 0; x < kGBWidth;) {
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+            *dest++ = systemColorMap8[gbLineMix[x++]];
+        }
+        if (gbBorderOn)
+            dest += gbBorderColumnSkip;
+#ifndef __LIBRETRO__
+        *dest++ = 0; // for filters that read one pixel more
+#endif
+    } break;
     case 16: {
 #ifdef __LIBRETRO__
         uint16_t* dest = (uint16_t*)g_pix + gbBorderLineSkip * (register_LY + gbBorderRowSkip)
@@ -4128,7 +4176,7 @@ void gbEmulate(int ticksToStop)
                 IFF |= 1;
             } else
                 tempIFF -= clockTicks;
-            IFF = (IFF & 0xCF) | (tempIFF << 4);
+            IFF = (uint16_t)((IFF & 0xCF) | (tempIFF << 4));
 
             if (IFF & 0x08)
                 IFF &= 0x82;
@@ -4368,16 +4416,16 @@ void gbEmulate(int ticksToStop)
                         else {
                             if (!speedup_throttle_set && coreOptions.throttle != coreOptions.speedup_throttle) {
                                 last_throttle = coreOptions.throttle;
-                                soundSetThrottle(coreOptions.speedup_throttle);
+                                soundSetThrottle((unsigned short)coreOptions.speedup_throttle);
                                 speedup_throttle_set = true;
                             }
 
                             if (coreOptions.speedup_throttle_frame_skip)
-                                framesToSkip += std::ceil(double(coreOptions.speedup_throttle) / 100.0) - 1;
+                                framesToSkip += (int)(std::ceil(double(coreOptions.speedup_throttle) / 100.0) - 1);
                         }
                     }
                     else if (speedup_throttle_set) {
-                        soundSetThrottle(last_throttle);
+                        soundSetThrottle((unsigned short)last_throttle);
                         speedup_throttle_set = false;
                     }
 #else
@@ -4557,7 +4605,7 @@ void gbEmulate(int ticksToStop)
                 }
             }
             gbMemory[0xff0f] = register_IF;
-            gbMemory[0xff41] = register_STAT = (register_STAT & 0xfc) | gbLcdModeDelayed;
+            gbMemory[0xff41] = register_STAT = (uint8_t)((register_STAT & 0xfc) | gbLcdModeDelayed);
         } else {
 
             // Used to update the screen with white lines when it's off.
@@ -4943,7 +4991,7 @@ bool gbLoadRomData(const char* data, size_t size) {
 
 #ifndef __LIBRETRO__
 bool gbApplyPatch(const char* patchName) {
-    int size = g_gbCartData.rom_size();
+    int size = (int)g_gbCartData.rom_size();
     if (!applyPatch(patchName, &gbRom, &size)) {
         return false;
     }

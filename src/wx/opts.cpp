@@ -117,9 +117,7 @@ opts_t::opts_t()
 // FIXME: simulate MakeInstanceFilename(vbam.ini) using subkeys (Slave%d/*)
 void load_opts(bool first_time_launch) {
     // just for sanity...
-    static bool did_init = false;
-    VBAM_CHECK(!did_init);
-    did_init = true;
+    static bool did_init = true;
 
     // enumvals should not be translated, since they would cause config file
     // change after lang change
@@ -250,19 +248,6 @@ void load_opts(bool first_time_launch) {
     // now read actual values and set to default if unset
     // config file will be updated with unset options
     cfg->SetRecordDefaults();
-
-    // Deprecated / moved options handling.
-    {
-        // The SDL audio API is no longer supported.
-        wxString temp;
-        if (cfg->Read("Sound/AudioAPI", &temp) && temp == "sdl") {
-#if defined(VBAM_ENABLE_XAUDIO2)
-            cfg->Write("Sound/AudioAPI", "xaudio2");
-#else
-            cfg->Write("Sound/AudioAPI", "openal");
-#endif
-        }
-    }
 
     // First access here will also initialize translations.
     for (config::Option& opt : config::Option::All()) {

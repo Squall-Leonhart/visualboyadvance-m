@@ -38,7 +38,11 @@
 #include "core/gba/internal/gbaSockClient.h"
 
 #ifdef _MSC_VER
+#if __STDC_WANT_SECURE_LIB__
+#define snprintf sprintf_s
+#else
 #define snprintf _snprintf
+#endif
 #endif
 
 #ifdef UPDATE_REG
@@ -58,9 +62,9 @@ const char* MakeInstanceFilename(const char* Input)
         free(result);
     }
 
-    result = (char*)malloc(strlen(Input) + 3);
+    result = (char*)malloc(strlen(Input) + 4);
     char* p = strrchr((char*)Input, '.');
-    sprintf(result, "%.*s-%d.%s", (int)(p - Input), Input, vbaid + 1, p + 1);
+    snprintf(result, strlen(Input) + 3, "%.*s-%d.%s", (int)(p - Input), Input, vbaid + 1, p + 1);
     return result;
 }
 
@@ -138,6 +142,7 @@ int WaitForSingleObject(sem_t* s, int t)
 #include <signal.h>
 static void alrmhand(int sig)
 {
+    (void)sig;
 }
 #endif
 int WaitForSingleObject(sem_t* s, int t)
@@ -534,21 +539,37 @@ bool GetLinkServerHost(char* const host, size_t size)
     host[0] = '\0';
 
     if (linkDriver && linkDriver->mode == LINK_GAMECUBE_DOLPHIN) {
+#if __STDC_WANT_SECURE_LIB__
+        strncpy_s(host, size, joybusHostAddr.toString().c_str(), size);
+#else
         strncpy(host, joybusHostAddr.toString().c_str(), size);
+#endif
     } else if (lanlink.server) {
         if (IP_LINK_BIND_ADDRESS == "*") {
             auto local_addr = sf::IpAddress::getLocalAddress();
             if (local_addr) {
+#if __STDC_WANT_SECURE_LIB__
+                strncpy_s(host, size, local_addr.value().toString().c_str(), size);
+#else
                 strncpy(host, local_addr.value().toString().c_str(), size);
+#endif
             } else {
                 return false;
             }
         } else {
+#if __STDC_WANT_SECURE_LIB__
+            strncpy_s(host, size, IP_LINK_BIND_ADDRESS.c_str(), size);
+#else
             strncpy(host, IP_LINK_BIND_ADDRESS.c_str(), size);
+#endif
         }
     }
     else {
+#if __STDC_WANT_SECURE_LIB__
+        strncpy_s(host, size, lc.serveraddr.toString().c_str(), size);
+#else
         strncpy(host, lc.serveraddr.toString().c_str(), size);
+#endif
     }
 
     return true;
@@ -588,7 +609,7 @@ void SetLinkTimeout(int value)
 void EnableLinkServer(bool enable, int numSlaves)
 {
     lanlink.server = enable;
-    lanlink.numslaves = numSlaves;
+    lanlink.numslaves = (uint16_t)numSlaves;
 }
 
 void EnableSpeedHacks(bool enable)
@@ -802,26 +823,26 @@ void CableServer::Send(void)
         if (lanlink.numslaves == 1) {
             if (lanlink.type == 0) {
                 outbuffer[0] = 8;
-                tcpsocket[1].send(outbuffer, 8);
+                (void)tcpsocket[1].send(outbuffer, 8);
             }
         } else if (lanlink.numslaves == 2) {
             WRITE16LE(&uint16_toutbuffer[4], cable_data[2]);
             if (lanlink.type == 0) {
                 outbuffer[0] = 10;
-                tcpsocket[1].send(outbuffer, 10);
+                (void)tcpsocket[1].send(outbuffer, 10);
                 WRITE16LE(&uint16_toutbuffer[4], cable_data[1]);
-                tcpsocket[2].send(outbuffer, 10);
+                (void)tcpsocket[2].send(outbuffer, 10);
             }
         } else {
             if (lanlink.type == 0) {
                 outbuffer[0] = 12;
                 WRITE16LE(&uint16_toutbuffer[4], cable_data[2]);
                 WRITE16LE(&uint16_toutbuffer[5], cable_data[3]);
-                tcpsocket[1].send(outbuffer, 12);
+                (void)tcpsocket[1].send(outbuffer, 12);
                 WRITE16LE(&uint16_toutbuffer[4], cable_data[1]);
-                tcpsocket[2].send(outbuffer, 12);
+                (void)tcpsocket[2].send(outbuffer, 12);
                 WRITE16LE(&uint16_toutbuffer[5], cable_data[2]);
-                tcpsocket[3].send(outbuffer, 12);
+                (void)tcpsocket[3].send(outbuffer, 12);
             }
         }
     }
@@ -847,19 +868,19 @@ void CableServer::Recv(void)
             inbuffer[0] = 1;
             while (numbytes < inbuffer[0]) {
                 size_t nr;
-                tcpsocket[i + 1].receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
-                numbytes += nr;
+                (void)tcpsocket[i + 1].receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
+                numbytes += (int)nr;
             }
             if (inbuffer[1] == -32) {
                 char message[30];
-                sprintf(message, _("Player %d disconnected."), i + 2);
+                snprintf(message, sizeof(message), _("Player %d disconnected."), i + 2);
                 systemScreenMessage(message);
                 outbuffer[0] = 4;
                 outbuffer[1] = -32;
                 for (i = 1; i < lanlink.numslaves; i++) {
-                    tcpsocket[i].send(outbuffer, 12);
+                    (void)tcpsocket[i].send(outbuffer, 12);
                     size_t nr;
-                    tcpsocket[i].receive(inbuffer, 256, nr);
+                    (void)tcpsocket[i].receive(inbuffer, 256, nr);
                     tcpsocket[i].disconnect();
                 }
                 CloseLink();
@@ -879,7 +900,7 @@ void CableServer::SendGB(void)
     if (lanlink.type == 0) { // TCP
         if (lanlink.numslaves == 1) {
             if (lanlink.type == 0) {
-                tcpsocket[1].send(&cable_gb_data[0], 1);
+                (void)tcpsocket[1].send(&cable_gb_data[0], 1);
             }
         }
     }
@@ -908,15 +929,15 @@ bool CableServer::RecvGB(void)
             uint8_t recv_byte = 0;
 
             size_t nr;
-            tcpsocket[i + 1].receive(&recv_byte, 1, nr);
-            numbytes += nr;
+            (void)tcpsocket[i + 1].receive(&recv_byte, 1, nr);
+            numbytes += (int)nr;
 
             if (numbytes != 0)
                 counter = 1;
 
             if (inbuffer[1] == -32) {
                 char message[30];
-                sprintf(message, _("Player %d disconnected."), i + 2);
+                snprintf(message, sizeof(message), _("Player %d disconnected."), i + 2);
                 systemScreenMessage(message);
                 for (i = 1; i < lanlink.numslaves; i++) {
                     tcpsocket[i].disconnect();
@@ -946,16 +967,16 @@ CableClient::CableClient(void)
 void CableClient::CheckConn(void)
 {
     size_t nr;
-    lanlink.tcpsocket.receive(inbuffer, 1, nr);
-    numbytes = nr;
+    (void)lanlink.tcpsocket.receive(inbuffer, 1, nr);
+    numbytes = (int)nr;
     if (numbytes > 0) {
         while (numbytes < inbuffer[0]) {
-            lanlink.tcpsocket.receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
-            numbytes += nr;
+            (void)lanlink.tcpsocket.receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
+            numbytes += (int)nr;
         }
         if (inbuffer[1] == -32) {
             outbuffer[0] = 4;
-            lanlink.tcpsocket.send(outbuffer, 4);
+            (void)lanlink.tcpsocket.send(outbuffer, 4);
             systemScreenMessage(_("Server disconnected."));
             CloseLink();
             return;
@@ -989,8 +1010,8 @@ bool CableClient::RecvGB(void)
     size_t nr;
     uint8_t recv_byte = 0;
 
-    lanlink.tcpsocket.receive(&recv_byte, 1, nr);
-    numbytes += nr;
+    (void)lanlink.tcpsocket.receive(&recv_byte, 1, nr);
+    numbytes += (int)nr;
 
     if (numbytes != 0)
         transferring = false;
@@ -1011,7 +1032,7 @@ void CableClient::SendGB()
     if (transferring)
         return;
 
-    lanlink.tcpsocket.send(&cable_gb_data[1], 1);
+    (void)lanlink.tcpsocket.send(&cable_gb_data[1], 1);
 
     transferring = true;
 }
@@ -1030,12 +1051,12 @@ void CableClient::Recv(void)
     inbuffer[0] = 1;
     size_t nr;
     while (numbytes < inbuffer[0]) {
-        lanlink.tcpsocket.receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
-        numbytes += nr;
+        (void)lanlink.tcpsocket.receive(inbuffer + numbytes, inbuffer[0] - numbytes, nr);
+        numbytes += (int)nr;
     }
     if (inbuffer[1] == -32) {
         outbuffer[0] = 4;
-        lanlink.tcpsocket.send(outbuffer, 4);
+        (void)lanlink.tcpsocket.send(outbuffer, 4);
         systemScreenMessage(_("Server disconnected."));
         CloseLink();
         return;
@@ -1054,9 +1075,9 @@ void CableClient::Recv(void)
 void CableClient::Send()
 {
     outbuffer[0] = 4;
-    outbuffer[1] = linkid << 2;
+    outbuffer[1] = (char)(linkid << 2);
     WRITE16LE(&uint16_toutbuffer[1], cable_data[linkid]);
-    lanlink.tcpsocket.send(outbuffer, 4);
+    (void)lanlink.tcpsocket.send(outbuffer, 4);
     return;
 }
 
@@ -1119,7 +1140,7 @@ static ConnectionState ConnectUpdateSocket(char* const message, size_t size)
         fdset.add(lanlink.tcplistener);
 
         if (fdset.wait(sf::milliseconds(150))) {
-            uint16_t nextSlave = lanlink.connectedSlaves + 1;
+            uint16_t nextSlave = (uint16_t)(lanlink.connectedSlaves + 1);
 
             sf::Socket::Status st = lanlink.tcplistener.accept(ls.tcpsocket[nextSlave]);
 
@@ -1133,7 +1154,7 @@ static ConnectionState ConnectUpdateSocket(char* const message, size_t size)
                 sf::Packet packet;
                 packet << nextSlave << lanlink.numslaves;
 
-                ls.tcpsocket[nextSlave].send(packet);
+                (void)ls.tcpsocket[nextSlave].send(packet);
 
                 snprintf(message, size, N_("Player %d connected"), nextSlave);
 
@@ -1146,7 +1167,7 @@ static ConnectionState ConnectUpdateSocket(char* const message, size_t size)
                 sf::Packet packet;
                 packet << true;
 
-                ls.tcpsocket[i].send(packet);
+                (void)ls.tcpsocket[i].send(packet);
             }
 
             snprintf(message, size, N_("All players connected"));
@@ -1185,7 +1206,7 @@ static ConnectionState ConnectUpdateSocket(char* const message, size_t size)
 
             sf::SocketSelector fdset;
             fdset.add(lanlink.tcpsocket);
-            fdset.wait(sf::milliseconds(150));
+            (void)fdset.wait(sf::milliseconds(150));
         }
     }
 
@@ -1210,7 +1231,7 @@ void StartCableSocket(uint16_t value)
             cable_data[0] = READ16LE(&g_ioMem[COMM_SIODATA8]);
             transfer_start_time_from_master = linktime;
             tspeed = value & 3;
-            ls.Send();
+            (void)ls.Send();
             transfer_direction = RECEIVING;
             linktime = 0;
             UPDATE_REG(COMM_SIOMULTI0, cable_data[0]);
@@ -1248,7 +1269,7 @@ static void UpdateCableSocket(int ticks)
     if (linkid && transfer_direction == SENDING && lc.transferring && linktime >= transfer_start_time_from_master) {
         cable_data[linkid] = READ16LE(&g_ioMem[COMM_SIODATA8]);
 
-        lc.Send();
+        (void)lc.Send();
         UPDATE_REG(COMM_SIODATA32_L, cable_data[0]);
         UPDATE_REG(COMM_SIOCNT, READ16LE(&g_ioMem[COMM_SIOCNT]) | 0x80);
         transfer_direction = RECEIVING;
@@ -1284,7 +1305,7 @@ static void CloseSocket()
         outbuffer[0] = 4;
         outbuffer[1] = -32;
         if (lanlink.type == 0)
-            lanlink.tcpsocket.send(outbuffer, 4);
+            (void)lanlink.tcpsocket.send(outbuffer, 4);
     } else {
         char outbuffer[12];
         int i;
@@ -1292,7 +1313,7 @@ static void CloseSocket()
         outbuffer[1] = -32;
         for (i = 1; i <= lanlink.numslaves; i++) {
             if (lanlink.type == 0) {
-                ls.tcpsocket[i].send(outbuffer, 12);
+                (void)ls.tcpsocket[i].send(outbuffer, 12);
             }
             ls.tcpsocket[i].disconnect();
         }
@@ -1491,7 +1512,7 @@ void RFUServer::DeSerialize(sf::Packet& packet, int slave)
     packet >> slave_is_host;
     packet >> rfu_data.rfu_reqid[slave];
     if (slave_is_host) {
-        current_host = slave;
+        current_host = (uint8_t)slave;
         for (int j = 0; j < 7; j++)
             packet >> rfu_data.rfu_broadcastdata[slave][j];
     }
@@ -1523,18 +1544,18 @@ void RFUServer::Send(void)
         sf::Packet packet;
         if (lanlink.numslaves == 1) {
             if (lanlink.type == 0) {
-                tcpsocket[1].send(Serialize(packet, 1));
+                (void)tcpsocket[1].send(Serialize(packet, 1));
             }
         } else if (lanlink.numslaves == 2) {
             if (lanlink.type == 0) {
-                tcpsocket[1].send(Serialize(packet, 1));
-                tcpsocket[2].send(Serialize(packet, 2));
+                (void)tcpsocket[1].send(Serialize(packet, 1));
+                (void)tcpsocket[2].send(Serialize(packet, 2));
             }
         } else {
             if (lanlink.type == 0) {
-                tcpsocket[1].send(Serialize(packet, 1));
-                tcpsocket[2].send(Serialize(packet, 2));
-                tcpsocket[3].send(Serialize(packet, 3));
+                (void)tcpsocket[1].send(Serialize(packet, 1));
+                (void)tcpsocket[2].send(Serialize(packet, 2));
+                (void)tcpsocket[3].send(Serialize(packet, 3));
             }
         }
     }
@@ -1570,7 +1591,7 @@ void RFUServer::Recv(void)
             sf::Socket::Status status = tcpsocket[i + 1].receive(packet);
             if (status == sf::Socket::Status::Disconnected) {
                 char message[30];
-                sprintf(message, _("Player %d disconnected."), i + 1);
+                snprintf(message, sizeof(message), _("Player %d disconnected."), i + 1);
                 systemScreenMessage(message);
                 //tcpsocket[i + 1].disconnect();
                 //CloseLink();
@@ -1659,7 +1680,7 @@ void RFUClient::DeSerialize(sf::Packet& packet)
 void RFUClient::Send()
 {
     sf::Packet packet;
-    lanlink.tcpsocket.send(Serialize(packet));
+    (void)lanlink.tcpsocket.send(Serialize(packet));
 }
 
 void RFUClient::Recv(void)
@@ -1709,7 +1730,7 @@ static ConnectionState ConnectUpdateRFUSocket(char* const message, size_t size)
                 sf::Packet packet;
                 packet << nextSlave << lanlink.numslaves;
 
-                rfu_server.tcpsocket[nextSlave].send(packet);
+                (void)rfu_server.tcpsocket[nextSlave].send(packet);
 
                 snprintf(message, size, N_("Player %d connected"), nextSlave);
                 lanlink.connectedSlaves++;
@@ -1721,7 +1742,7 @@ static ConnectionState ConnectUpdateRFUSocket(char* const message, size_t size)
                 sf::Packet packet;
                 packet << true;
 
-                rfu_server.tcpsocket[i].send(packet);
+                (void)rfu_server.tcpsocket[i].send(packet);
                 rfu_server.tcpsocket[i].setBlocking(false);
             }
 
@@ -1762,11 +1783,11 @@ static ConnectionState ConnectUpdateRFUSocket(char* const message, size_t size)
 
             sf::SocketSelector fdset;
             fdset.add(lanlink.tcpsocket);
-            fdset.wait(sf::milliseconds(150));
+            (void)fdset.wait(sf::milliseconds(150));
         }
     }
 
-    rfu_data.numgbas = lanlink.numslaves + 1;
+    rfu_data.numgbas = (uint8_t)(lanlink.numslaves + 1);
     log("num gbas: %d\n", rfu_data.numgbas);
 
     return newState;
@@ -1846,7 +1867,7 @@ static void StartRFUSocket(uint16_t value)
                 CurCOM = READ32LE(&g_ioMem[COMM_SIODATA32_L]);
                 if (siodata_h == 0x9966) //initialize cmd
                 {
-                    uint8_t tmpcmd = CurCOM;
+                    uint8_t tmpcmd = (uint8_t)CurCOM;
                     if (tmpcmd != 0x10 && tmpcmd != 0x11 && tmpcmd != 0x13 && tmpcmd != 0x14 && tmpcmd != 0x16 && tmpcmd != 0x17 && tmpcmd != 0x19 && tmpcmd != 0x1a && tmpcmd != 0x1b && tmpcmd != 0x1c && tmpcmd != 0x1d && tmpcmd != 0x1e && tmpcmd != 0x1f && tmpcmd != 0x20 && tmpcmd != 0x21 && tmpcmd != 0x24 && tmpcmd != 0x25 && tmpcmd != 0x26 && tmpcmd != 0x27 && tmpcmd != 0x30 && tmpcmd != 0x32 && tmpcmd != 0x33 && tmpcmd != 0x34 && tmpcmd != 0x3d && tmpcmd != 0xa8 && tmpcmd != 0xee) {
                     }
                     rfu_counter = 0;
@@ -1941,13 +1962,13 @@ static void StartRFUSocket(uint16_t value)
                                 for (int i = 0; i < rfu_numclients; i++)
                                     rfu_masterdata[i] = rfu_clientlist[i];
                             }
-                            rfu_id = (gbaid << 3) + 0x61f1;
+                            rfu_id = (uint16_t)((gbaid << 3) + 0x61f1);
                             rfu_cmd ^= 0x80;
                             break;
                         case 0x1f: // join a room as client
                             // TODO: to fix infinte send&recv w/o giving much cance to update the screen when both side acting as client
                             // on MarioGolfAdv lobby(might be due to leftover data when switching from host to join mode at the same time?)
-                            rfu_id = rfu_masterdata[0];
+                            rfu_id = (uint16_t)rfu_masterdata[0];
                             gbaid = (rfu_id - 0x61f1) >> 3;
                             rfu_idx = rfu_id;
                             gbaidx = gbaid;
@@ -2184,7 +2205,7 @@ static void StartRFUSocket(uint16_t value)
                                         if (qdata_len >= rfu_qrecv_broadcast_data_len) {
                                             rfu_masterq = rfu_qrecv_broadcast_data_len = qdata_len;
                                             gbaid = rfu_data.rfu_datalist[linkid][rfu_data.rfu_listfront[linkid]].gbaid;
-                                            rfu_id = (gbaid << 3) + 0x61f1;
+                                            rfu_id = (uint16_t)((gbaid << 3) + 0x61f1);
                                             if (rfu_ishost) {
                                                 rfu_curclient = (uint8_t)rfu_data.rfu_clientidx[gbaid];
                                             }
@@ -2219,14 +2240,14 @@ static void StartRFUSocket(uint16_t value)
                                     for (int j = 0; j < rfu_data.numgbas; j++)
                                         if (j != linkid) {
                                             memcpy(rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                            rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = linkid;
+                                            rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = (uint8_t)linkid;
                                             rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].len = rfu_qsend2;
                                             rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].time = linktime;
                                             rfu_data.rfu_listback[j]++;
                                         }
                                 } else if (linkid != gbaid) {
                                     memcpy(rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                    rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = linkid;
+                                    rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = (uint8_t)linkid;
                                     rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].len = rfu_qsend2;
                                     rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].time = linktime;
                                     rfu_data.rfu_listback[gbaid]++;
@@ -2246,14 +2267,14 @@ static void StartRFUSocket(uint16_t value)
                                     for (int j = 0; j < rfu_data.numgbas; j++)
                                         if (j != linkid) {
                                             memcpy(rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                            rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = linkid;
+                                            rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = (uint8_t)linkid;
                                             rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].len = rfu_qsend2;
                                             rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].time = linktime;
                                             rfu_data.rfu_listback[j]++;
                                         }
                                 } else if (linkid != gbaid) {
                                     memcpy(rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                    rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = linkid;
+                                    rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = (uint8_t)linkid;
                                     rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].len = rfu_qsend2;
                                     rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].time = linktime;
                                     rfu_data.rfu_listback[gbaid]++;
@@ -2270,13 +2291,13 @@ static void StartRFUSocket(uint16_t value)
                             if (rfu_ishost) {
                                 for (int j = 0; j < rfu_data.numgbas; j++)
                                     if (j != linkid) {
-                                        rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = linkid;
+                                        rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].gbaid = (uint8_t)linkid;
                                         rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].len = 0; //rfu_qsend2;
                                         rfu_data.rfu_datalist[j][rfu_data.rfu_listback[j]].time = linktime;
                                         rfu_data.rfu_listback[j]++;
                                     }
                             } else if (linkid != gbaid) {
-                                rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = linkid;
+                                rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].gbaid = (uint8_t)linkid;
                                 rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].len = 0; //rfu_qsend2;
                                 rfu_data.rfu_datalist[gbaid][rfu_data.rfu_listback[gbaid]].time = linktime;
                                 rfu_data.rfu_listback[gbaid]++;
@@ -2457,7 +2478,7 @@ bool LinkRFUUpdateSocket()
                     rfu_waiting = false;
                 }
             }
-            UPDATE_REG(COMM_SIODATA32_L, rfu_buf);
+            UPDATE_REG(COMM_SIODATA32_L, (uint16_t)rfu_buf);
             UPDATE_REG(COMM_SIODATA32_H, rfu_buf >> 16);
         }
     }
@@ -2472,9 +2493,9 @@ static void UpdateRFUSocket(int ticks)
         if (linkid == 0) {
             linktime = 0;
             rfu_server.Recv(); // recv broadcast data
-            rfu_server.Send(); // send broadcast data
+            (void)rfu_server.Send(); // send broadcast data
         } else {
-            rfu_client.Send(); // send broadcast data
+            (void)rfu_client.Send(); // send broadcast data
             rfu_client.Recv(); // recv broadcast data
         }
         {
@@ -2687,10 +2708,10 @@ static ConnectionState InitIPC()
             return LINK_ERROR;
         }
         if (vbaid == n)
-            linkmem->numgbas = n + 1;
-        linkmem->linkflags = f | (1 << vbaid);
+            linkmem->numgbas = (uint8_t)(n + 1);
+        linkmem->linkflags = (uint8_t)(f | (1 << vbaid));
     }
-    linkid = vbaid;
+    linkid = (uint16_t)vbaid;
 
     for (int i = 0; i < 4; i++) {
         linkevent[sizeof(linkevent) - 2] = (char)i + '1';
@@ -2756,7 +2777,7 @@ static void StartCableIPC(uint16_t value)
                     n--;
                     m = (1 << n) - 1;
                 } while ((f & m) != m);
-                linkmem->trgbas = n;
+                linkmem->trgbas = (uint8_t)n;
 
                 // before starting xfer, make pathetic attempt
                 // at clearing out any previous stuck xfer
@@ -2826,7 +2847,7 @@ static void ReconnectCableIPC()
     }
     linkmem->linkflags |= 1 << linkid;
     if (n < linkid + 1)
-        linkmem->numgbas = linkid + 1;
+        linkmem->numgbas = (uint8_t)(linkid + 1);
     numtransfers = linkmem->numtransfers;
     systemScreenMessage(_("Lost link; reconnected"));
 }
@@ -2895,14 +2916,14 @@ static void UpdateCableIPC(int)
             if (WaitForSingleObject(linksync[transfer_direction - 1], linktimeout) == WAIT_TIMEOUT) {
                 // assume slave has dropped off if timed out
                 if (!linkid) {
-                    linkmem->trgbas = transfer_direction - 1;
+                    linkmem->trgbas = (uint8_t)(transfer_direction - 1);
                     int f = linkmem->linkflags;
                     f &= ~(1 << (transfer_direction - 1));
-                    linkmem->linkflags = f;
+                    linkmem->linkflags = (uint8_t)f;
                     if (f < (1 << transfer_direction) - 1)
-                        linkmem->numgbas = transfer_direction - 1;
+                        linkmem->numgbas = (uint8_t)(transfer_direction - 1);
                     char message[30];
-                    sprintf(message, _("Player %d disconnected."), transfer_direction - 1);
+                    snprintf(message, sizeof(message), _("Player %d disconnected."), transfer_direction - 1);
                     systemScreenMessage(message);
                 }
                 transfer_direction = linkmem->trgbas + 1;
@@ -3051,7 +3072,7 @@ static void StartRFU(uint16_t value)
                 CurCOM = READ32LE(&g_ioMem[COMM_SIODATA32_L]);
                 if (siodata_h == 0x9966) //initialize cmd
                 {
-                    uint8_t tmpcmd = CurCOM;
+                    uint8_t tmpcmd = (uint8_t)CurCOM;
                     if (tmpcmd != 0x10 && tmpcmd != 0x11 && tmpcmd != 0x13 && tmpcmd != 0x14 && tmpcmd != 0x16 && tmpcmd != 0x17 && tmpcmd != 0x19 && tmpcmd != 0x1a && tmpcmd != 0x1b && tmpcmd != 0x1c && tmpcmd != 0x1d && tmpcmd != 0x1e && tmpcmd != 0x1f && tmpcmd != 0x20 && tmpcmd != 0x21 && tmpcmd != 0x24 && tmpcmd != 0x25 && tmpcmd != 0x26 && tmpcmd != 0x27 && tmpcmd != 0x30 && tmpcmd != 0x32 && tmpcmd != 0x33 && tmpcmd != 0x34 && tmpcmd != 0x3d && tmpcmd != 0xa8 && tmpcmd != 0xee) {
                         log("%08X : UnkCMD %08X  %04X  %08X %08X\n", GetTickCount(), CurCOM, PrevVAL, PrevCOM, PrevDAT);
                     }
@@ -3206,13 +3227,13 @@ static void StartRFU(uint16_t value)
                                 for (int i = 0; i < rfu_numclients; i++)
                                     rfu_masterdata[i] = rfu_clientlist[i];
                             }
-                            rfu_id = (gbaid << 3) + 0x61f1;
+                            rfu_id = (uint16_t)((gbaid << 3) + 0x61f1);
                             rfu_cmd ^= 0x80;
                             break;
                         case 0x1f: // join a room as client
                             // TODO: to fix infinte send&recv w/o giving much cance to update the screen when both side acting as client
                             // on MarioGolfAdv lobby(might be due to leftover data when switching from host to join mode at the same time?)
-                            rfu_id = rfu_masterdata[0];
+                            rfu_id = (uint16_t)rfu_masterdata[0];
                             gbaid = (rfu_id - 0x61f1) >> 3;
                             rfu_idx = rfu_id;
                             gbaidx = gbaid;
@@ -3579,7 +3600,7 @@ static void StartRFU(uint16_t value)
                                             if (tmpq >= rfu_qrecv_broadcast_data_len) {
                                                 rfu_masterq = rfu_qrecv_broadcast_data_len = tmpq;
                                                 gbaid = linkmem->rfu_datalist[vbaid][linkmem->rfu_listfront[vbaid]].gbaid;
-                                                rfu_id = (gbaid << 3) + 0x61f1;
+                                                rfu_id = (uint16_t)((gbaid << 3) + 0x61f1);
                                                 if (rfu_ishost)
                                                     rfu_curclient = (uint8_t)linkmem->rfu_clientidx[gbaid];
                                                 if (rfu_qrecv_broadcast_data_len != 0) { //data size > 0
@@ -3634,7 +3655,7 @@ static void StartRFU(uint16_t value)
                                             WaitForSingleObject(linksync[j], linktimeout); //wait until unlocked
                                             ResetEvent(linksync[j]); //lock it so noone can access it
                                             memcpy(linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                            linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = vbaid;
+                                            linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = (uint8_t)vbaid;
                                             linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].len = rfu_qsend2;
                                             linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].time = linktime;
                                             linkmem->rfu_listback[j]++;
@@ -3644,7 +3665,7 @@ static void StartRFU(uint16_t value)
                                     WaitForSingleObject(linksync[gbaid], linktimeout); //wait until unlocked
                                     ResetEvent(linksync[gbaid]); //lock it so noone can access it
                                     memcpy(linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                    linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = vbaid;
+                                    linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = (uint8_t)vbaid;
                                     linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].len = rfu_qsend2;
                                     linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].time = linktime;
                                     linkmem->rfu_listback[gbaid]++;
@@ -3680,7 +3701,7 @@ static void StartRFU(uint16_t value)
                                             WaitForSingleObject(linksync[j], linktimeout); //wait until unlocked
                                             ResetEvent(linksync[j]); //lock it so noone can access it
                                             memcpy(linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                            linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = vbaid;
+                                            linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = (uint8_t)vbaid;
                                             linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].len = rfu_qsend2;
                                             linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].time = linktime;
                                             linkmem->rfu_listback[j]++;
@@ -3690,7 +3711,7 @@ static void StartRFU(uint16_t value)
                                     WaitForSingleObject(linksync[gbaid], linktimeout); //wait until unlocked
                                     ResetEvent(linksync[gbaid]); //lock it so noone can access it
                                     memcpy(linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].data, rfu_masterdata, 4 * rfu_qsend2);
-                                    linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = vbaid;
+                                    linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = (uint8_t)vbaid;
                                     linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].len = rfu_qsend2;
                                     linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].time = linktime;
                                     linkmem->rfu_listback[gbaid]++;
@@ -3719,7 +3740,7 @@ static void StartRFU(uint16_t value)
                                         WaitForSingleObject(linksync[j], linktimeout); //wait until unlocked
                                         ResetEvent(linksync[j]); //lock it so noone can access it
                                         //memcpy(linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].data,rfu_masterdata,4*rfu_qsend2);
-                                        linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = vbaid;
+                                        linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].gbaid = (uint8_t)vbaid;
                                         linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].len = 0; //rfu_qsend2;
                                         linkmem->rfu_datalist[j][linkmem->rfu_listback[j]].time = linktime;
                                         linkmem->rfu_listback[j]++;
@@ -3729,7 +3750,7 @@ static void StartRFU(uint16_t value)
                                 WaitForSingleObject(linksync[gbaid], linktimeout); //wait until unlocked
                                 ResetEvent(linksync[gbaid]); //lock it so noone can access it
                                 //memcpy(linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].data,rfu_masterdata,4*rfu_qsend2);
-                                linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = vbaid;
+                                linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].gbaid = (uint8_t)vbaid;
                                 linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].len = 0; //rfu_qsend2;
                                 linkmem->rfu_datalist[gbaid][linkmem->rfu_listback[gbaid]].time = linktime;
                                 linkmem->rfu_listback[gbaid]++;
@@ -3987,7 +4008,7 @@ bool LinkRFUUpdate()
                     rfu_waiting = false;
                 }
             }
-            UPDATE_REG(COMM_SIODATA32_L, rfu_buf);
+            UPDATE_REG(COMM_SIODATA32_L, (uint16_t)rfu_buf);
             UPDATE_REG(COMM_SIODATA32_H, rfu_buf >> 16);
         }
     }
@@ -4124,11 +4145,11 @@ static void CloseIPC()
     int f = linkmem->linkflags;
     f &= ~(1 << linkid);
     if (f & 0xf) {
-        linkmem->linkflags = f;
+        linkmem->linkflags = (uint8_t)f;
         int n = linkmem->numgbas;
         for (int i = 0; i < n; i--)
             if (f <= (1 << (i + 1)) - 1) {
-                linkmem->numgbas = i + 1;
+                linkmem->numgbas = (uint8_t)(i + 1);
                 break;
             }
     }

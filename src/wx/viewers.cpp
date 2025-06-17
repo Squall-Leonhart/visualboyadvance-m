@@ -331,7 +331,7 @@ public:
 
         for (int i = 0; i < dis->nlines; i++) {
             dis->addrs.push_back(addr);
-            addr += gbDis(buf, addr);
+            addr += gbDis(buf, sizeof(buf), addr);
             dis->strings.push_back(wxString(buf, wxConvLibc));
         }
 
@@ -459,14 +459,14 @@ public:
     void Update(int sel)
     {
         uint16_t* addr = ioregs[sel].address ? ioregs[sel].address : (uint16_t*)&g_ioMem[ioregs[sel].offset];
-        uint16_t mask, reg = *addr;
+        uint16_t mask, _reg = *addr;
         int i;
 
         for (mask = 1, i = 0; mask; mask <<= 1, i++)
-            bit[i]->SetValue(mask & reg);
+            bit[i]->SetValue(mask & _reg);
 
         wxString s;
-        s.Printf(wxT("%04X"), reg);
+        s.Printf(wxT("%04X"), _reg);
         val->SetLabel(s);
     }
 
@@ -476,15 +476,15 @@ public:
             if (ev.GetEventObject() == bit[i]) {
                 // it'd be faster to store the value and just flip
                 // the bit, but it's easier this way
-                uint16_t mask, reg = 0;
+                uint16_t mask, _reg = 0;
                 int j;
 
                 for (mask = 1, j = 0; mask; mask <<= 1, j++)
                     if (bit[j]->GetValue())
-                        reg |= mask;
+                        _reg |= mask;
 
                 wxString s;
-                s.Printf(wxT("%04X"), reg);
+                s.Printf(wxT("%04X"), _reg);
                 val->SetLabel(s);
                 return;
             }
@@ -503,16 +503,16 @@ public:
 	(void)ev; // unused params
         int sel = addr_->GetSelection();
         uint16_t* addr = ioregs[sel].address ? ioregs[sel].address : (uint16_t*)&g_ioMem[ioregs[sel].offset];
-        uint16_t mask, reg = *addr;
-        reg &= ~ioregs[sel].write;
+        uint16_t mask, _reg = *addr;
+        _reg &= ~ioregs[sel].write;
         int i;
 
         for (mask = 1, i = 0; mask; mask <<= 1, i++) {
             if ((mask & ioregs[sel].write) && bit[i]->GetValue())
-                reg |= mask;
+                _reg |= mask;
         }
 
-        CPUWriteHalfWord(0x4000000 + ioregs[sel].offset, reg);
+        CPUWriteHalfWord(0x4000000 + ioregs[sel].offset, _reg);
         Update(sel);
     }
 
@@ -587,6 +587,9 @@ void LogDialog::Save(wxCommandEvent& ev)
     pats.append(wxALL_FILES);
     wxFileDialog dlg(this, _("Select output file"), logdir, def_name,
         pats, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+    SetGenericPath(dlg, logdir);
+
     int ret = dlg.ShowModal();
     def_name = dlg.GetPath();
     logdir = dlg.GetDirectory();
@@ -674,8 +677,8 @@ public:
         Goto(0);
         // initialize load/save support dialog already
         {
-            const wxString dname = wxT("MemSelRegion");
-            selregion = wxXmlResource::Get()->LoadDialog(this, dname);
+            const wxString _dname = wxT("MemSelRegion");
+            selregion = wxXmlResource::Get()->LoadDialog(this, _dname);
 
             if (!selregion)
                 baddialog();
@@ -729,6 +732,9 @@ public:
         pats.append(wxALL_FILES);
         wxFileDialog dlg(this, _("Select memory dump file"), memsave_dir, memsave_fn,
             pats, wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    
+        SetGenericPath(dlg, memsave_dir);
+
         int ret = dlg.ShowModal();
         memsave_fn = dlg.GetPath();
         memsave_dir = dlg.GetDirectory();
@@ -801,6 +807,9 @@ public:
         pats.append(wxALL_FILES);
         wxFileDialog dlg(this, _("Select output file"), memsave_dir, memsave_fn,
             pats, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+    
+        SetGenericPath(dlg, memsave_dir);
+
         int ret = dlg.ShowModal();
         memsave_dir = dlg.GetDirectory();
         memsave_fn = dlg.GetPath();

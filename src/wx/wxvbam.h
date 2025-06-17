@@ -36,6 +36,7 @@
 #endif
 
 #include "wx/wxlogdebug.h"
+#include "wx/compat_generic_file_dialog.h"
 
 template <typename T>
 void CheckPointer(T pointer)
@@ -84,7 +85,9 @@ public:
             return false;
         }
     }
+#ifndef VBAM_WX_MAC_PATCHED_FOR_ALERT_SOUND
     bool ProcessEvent(wxEvent& event) final;
+#endif
 
     wxString GetConfigDir();
     wxString GetDataDir();

@@ -48,13 +48,18 @@
 #include "core/gba/gbaRemote.h"
 #include "core/gba/internal/gbaBreakpoint.h"
 
+#if __STDC_WANT_SECURE_LIB__
+#define snprintf sprintf_s
+#define sscanf sscanf_s
+#endif
+
 extern int emulating;
 extern void CPUUpdateCPSR();
 
 int remotePort = 0;
 int remoteSignal = 5;
-SOCKET remoteSocket = -1;
-SOCKET remoteListenSocket = -1;
+SOCKET remoteSocket = (SOCKET)(-1);
+SOCKET remoteListenSocket = (SOCKET)(-1);
 bool remoteConnected = false;
 bool remoteResumed = false;
 
@@ -163,25 +168,25 @@ void breakReg_check(int i)
             if (brkR->flags != 0) {
                 uint32_t regVal = (i == 15 ? (armState ? reg[15].I - 4 : reg[15].I - 2) : reg[i].I);
                 if ((brkR->flags & 0x1) && (regVal == brkR->intVal)) {
-                    debuggerBreakOnRegisterCondition(i, brkR->intVal, regVal, 1);
+                    debuggerBreakOnRegisterCondition((uint8_t)i, brkR->intVal, regVal, 1);
                     notFound = false;
                 }
                 if ((brkR->flags & 0x8)) {
                     if ((brkR->flags & 0x4) && ((int)regVal < (int)brkR->intVal)) {
-                        debuggerBreakOnRegisterCondition(i, brkR->intVal, regVal, 4);
+                        debuggerBreakOnRegisterCondition((uint8_t)i, brkR->intVal, regVal, 4);
                         notFound = false;
                     }
                     if ((brkR->flags & 0x2) && ((int)regVal > (int)brkR->intVal)) {
-                        debuggerBreakOnRegisterCondition(i, brkR->intVal, regVal, 5);
+                        debuggerBreakOnRegisterCondition((uint8_t)i, brkR->intVal, regVal, 5);
                         notFound = false;
                     }
                 }
                 if ((brkR->flags & 0x4) && (regVal < brkR->intVal)) {
-                    debuggerBreakOnRegisterCondition(i, brkR->intVal, regVal, 2);
+                    debuggerBreakOnRegisterCondition((uint8_t)i, brkR->intVal, regVal, 2);
                     notFound = false;
                 }
                 if ((brkR->flags & 0x2) && (regVal > brkR->intVal)) {
-                    debuggerBreakOnRegisterCondition(i, brkR->intVal, regVal, 3);
+                    debuggerBreakOnRegisterCondition((uint8_t)i, brkR->intVal, regVal, 3);
                     notFound = false;
                 }
             }
@@ -251,11 +256,11 @@ void printBreakRegList(bool verbose)
             if (regBreakCounter[i][k]) {
                 if (!anyPrint) {
                     {
-                        sprintf(monbuf, "Register breakpoint list:\n");
+                        snprintf(monbuf, sizeof(monbuf), "Register breakpoint list:\n");
                         monprintf(monbuf);
                     }
                     {
-                        sprintf(monbuf, "-------------------------\n");
+                        snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                         monprintf(monbuf);
                     }
                     anyPrint = true;
@@ -263,37 +268,37 @@ void printBreakRegList(bool verbose)
                 struct regBreak* tmp = breakRegList[i * 4 + k];
                 for (int j = 0; j < regBreakCounter[i][k]; j++) {
                     if (tmp->flags & 8) {
-                        sprintf(monbuf, "No. %d:\tBreak if (signed)%s %08x\n", j, flagsToOP[tmp->flags & 7], tmp->intVal);
+                        snprintf(monbuf, sizeof(monbuf), "No. %d:\tBreak if (signed)%s %08x\n", j, flagsToOP[tmp->flags & 7], tmp->intVal);
                         monprintf(monbuf);
                     } else {
-                        sprintf(monbuf, "No. %d:\tBreak if %s %08x\n", j, flagsToOP[tmp->flags], tmp->intVal);
+                        snprintf(monbuf, sizeof(monbuf), "No. %d:\tBreak if %s %08x\n", j, flagsToOP[tmp->flags], tmp->intVal);
                         monprintf(monbuf);
                     }
                     tmp = tmp->next;
                 }
                 {
-                    sprintf(monbuf, "-------------------------\n");
+                    snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                     monprintf(monbuf);
                 }
             } else {
                 if (verbose) {
                     if (!anyPrint) {
                         {
-                            sprintf(monbuf, "Register breakpoint list:\n");
+                            snprintf(monbuf, sizeof(monbuf), "Register breakpoint list:\n");
                             monprintf(monbuf);
                         }
                         {
-                            sprintf(monbuf, "-------------------------\n");
+                            snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                             monprintf(monbuf);
                         }
                         anyPrint = true;
                     }
                     {
-                        sprintf(monbuf, "No breaks on r%d.\n", i);
+                        snprintf(monbuf, sizeof(monbuf), "No breaks on r%d.\n", i);
                         monprintf(monbuf);
                     }
                     {
-                        sprintf(monbuf, "-------------------------\n");
+                        snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                         monprintf(monbuf);
                     }
                 }
@@ -302,7 +307,7 @@ void printBreakRegList(bool verbose)
     }
     if (!verbose && !anyPrint) {
         {
-            sprintf(monbuf, "No Register breaks found.\n");
+            snprintf(monbuf, sizeof(monbuf), "No Register breaks found.\n");
             monprintf(monbuf);
         }
     }
@@ -350,7 +355,7 @@ void debuggerDontBreak(int n, char** args)
         debuggerNoBreakpointList[i] = address;
         debuggerNumOfDontBreak++;
         {
-            sprintf(monbuf, "Added Don't Break at %08x\n", address);
+            snprintf(monbuf, sizeof(monbuf), "Added Don't Break at %08x\n", address);
             monprintf(monbuf);
         }
     } else
@@ -363,7 +368,7 @@ void debuggerDontBreakClear(int n, char** args)
     if (n == 1) {
         debuggerNumOfDontBreak = 0;
         {
-            sprintf(monbuf, "Cleared Don't Break list.\n");
+            snprintf(monbuf, sizeof(monbuf), "Cleared Don't Break list.\n");
             monprintf(monbuf);
         }
     } else
@@ -382,16 +387,20 @@ void debuggerDumpLoad(int n, char** args)
 
         if (!dexp_eval(args[2], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         }
 
+#if __STDC_WANT_SECURE_LIB__
+        fopen_s(&f, file, "rb");
+#else
         f = fopen(file, "rb");
+#endif
         if (f == NULL) {
             {
-                sprintf(monbuf, "Error opening file.\n");
+                snprintf(monbuf, sizeof(monbuf), "Error opening file.\n");
                 monprintf(monbuf);
             }
             return;
@@ -405,7 +414,7 @@ void debuggerDumpLoad(int n, char** args)
             c = fgetc(f);
             if (c == -1)
                 break;
-            debuggerWriteByte(address, c);
+            debuggerWriteByte(address, (uint8_t)c);
             address++;
         }
 
@@ -425,23 +434,28 @@ void debuggerDumpSave(int n, char** args)
         file = args[1];
         if (!dexp_eval(args[2], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         }
         if (!dexp_eval(args[3], &size)) {
             {
-                sprintf(monbuf, "Invalid expression in size");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in size");
                 monprintf(monbuf);
             }
             return;
         }
 
+#if __STDC_WANT_SECURE_LIB__
+        fopen_s(&f, file, "wb");
+#else
         f = fopen(file, "wb");
+#endif
+
         if (f == NULL) {
             {
-                sprintf(monbuf, "Error opening file.\n");
+                snprintf(monbuf, sizeof(monbuf), "Error opening file.\n");
                 monprintf(monbuf);
             }
             return;
@@ -464,7 +478,7 @@ void debuggerEditByte(int n, char** args)
         uint32_t value;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
@@ -472,11 +486,11 @@ void debuggerEditByte(int n, char** args)
         for (int i = 2; i < n; i++) {
             if (!dexp_eval(args[i], &value)) {
                 {
-                    sprintf(monbuf, "Invalid expression in %d value.Ignored.\n", (i - 1));
+                    snprintf(monbuf, sizeof(monbuf), "Invalid expression in %d value.Ignored.\n", (i - 1));
                     monprintf(monbuf);
                 }
             }
-            debuggerWriteByte(address, (uint16_t)value);
+            debuggerWriteByte(address, (uint8_t)value);
             address++;
         }
     } else
@@ -490,14 +504,14 @@ void debuggerEditHalfWord(int n, char** args)
         uint32_t value;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         }
         if (address & 1) {
             {
-                sprintf(monbuf, "Error: address must be half-word aligned\n");
+                snprintf(monbuf, sizeof(monbuf), "Error: address must be half-word aligned\n");
                 monprintf(monbuf);
             }
             return;
@@ -505,7 +519,7 @@ void debuggerEditHalfWord(int n, char** args)
         for (int i = 2; i < n; i++) {
             if (!dexp_eval(args[i], &value)) {
                 {
-                    sprintf(monbuf, "Invalid expression in %d value.Ignored.\n", (i - 1));
+                    snprintf(monbuf, sizeof(monbuf), "Invalid expression in %d value.Ignored.\n", (i - 1));
                     monprintf(monbuf);
                 }
             }
@@ -523,14 +537,14 @@ void debuggerEditWord(int n, char** args)
         uint32_t value;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         }
         if (address & 3) {
             {
-                sprintf(monbuf, "Error: address must be word aligned\n");
+                snprintf(monbuf, sizeof(monbuf), "Error: address must be word aligned\n");
                 monprintf(monbuf);
             }
             return;
@@ -538,7 +552,7 @@ void debuggerEditWord(int n, char** args)
         for (int i = 2; i < n; i++) {
             if (!dexp_eval(args[i], &value)) {
                 {
-                    sprintf(monbuf, "Invalid expression in %d value.Ignored.\n", (i - 1));
+                    snprintf(monbuf, sizeof(monbuf), "Invalid expression in %d value.Ignored.\n", (i - 1));
                     monprintf(monbuf);
                 }
             }
@@ -572,12 +586,12 @@ bool debuggerBreakOnRegisterCondition(uint8_t registerName, uint32_t compareVal,
         typeName = "unknown";
     }
     {
-        sprintf(monbuf, "Breakpoint on R%02d : %08x is %s register content (%08x)\n", registerName, compareVal, typeName, regVal);
+        snprintf(monbuf, sizeof(monbuf), "Breakpoint on R%02d : %08x is %s register content (%08x)\n", registerName, compareVal, typeName, regVal);
         monprintf(monbuf);
     }
     if (debuggerInDB(armState ? reg[15].I - 4 : reg[15].I - 2)) {
         {
-            sprintf(monbuf, "But this address is marked not to break, so skipped\n");
+            snprintf(monbuf, sizeof(monbuf), "But this address is marked not to break, so skipped\n");
             monprintf(monbuf);
         }
         return false;
@@ -616,21 +630,21 @@ void debuggerEditRegister(int n, char** args)
         uint32_t val;
         if (r > 16) {
             {
-                sprintf(monbuf, "Error: Register must be valid (0-16)\n");
+                snprintf(monbuf, sizeof(monbuf), "Error: Register must be valid (0-16)\n");
                 monprintf(monbuf);
             }
             return;
         }
         if (!dexp_eval(args[2], &val)) {
             {
-                sprintf(monbuf, "Invalid expression in value.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in value.\n");
                 monprintf(monbuf);
             }
             return;
         }
         reg[r].I = val;
         {
-            sprintf(monbuf, "R%02d=%08X\n", r, val);
+            snprintf(monbuf, sizeof(monbuf), "R%02d=%08X\n", r, val);
             monprintf(monbuf);
         }
     } else
@@ -643,12 +657,12 @@ void debuggerEval(int n, char** args)
         uint32_t result = 0;
         if (dexp_eval(args[1], &result)) {
             {
-                sprintf(monbuf, " =$%08X\n", result);
+                snprintf(monbuf, sizeof(monbuf), " =$%08X\n", result);
                 monprintf(monbuf);
             }
         } else {
             {
-                sprintf(monbuf, "Invalid expression\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression\n");
                 monprintf(monbuf);
             }
         }
@@ -664,20 +678,20 @@ void debuggerFillByte(int n, char** args)
         uint32_t reps;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         }
         if (!dexp_eval(args[2], &value)) {
             {
-                sprintf(monbuf, "Invalid expression in value.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in value.\n");
                 monprintf(monbuf);
             }
         }
         if (!dexp_eval(args[3], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -697,24 +711,24 @@ void debuggerFillHalfWord(int n, char** args)
         uint32_t reps;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         } /*
 		 if(address & 1) {
-		 { sprintf(monbuf, "Error: address must be halfword aligned\n"); monprintf(monbuf); }
+		 { snprintf(monbuf, sizeof(monbuf), "Error: address must be halfword aligned\n"); monprintf(monbuf); }
 		 return;
 		 }*/
         if (!dexp_eval(args[2], &value)) {
             {
-                sprintf(monbuf, "Invalid expression in value.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in value.\n");
                 monprintf(monbuf);
             }
         }
         if (!dexp_eval(args[3], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -734,24 +748,24 @@ void debuggerFillWord(int n, char** args)
         uint32_t reps;
         if (!dexp_eval(args[1], &address)) {
             {
-                sprintf(monbuf, "Invalid expression in address.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in address.\n");
                 monprintf(monbuf);
             }
             return;
         } /*
 		 if(address & 3) {
-		 { sprintf(monbuf, "Error: address must be word aligned\n"); monprintf(monbuf); }
+		 { snprintf(monbuf, sizeof(monbuf), "Error: address must be word aligned\n"); monprintf(monbuf); }
 		 return;
 		 }*/
         if (!dexp_eval(args[2], &value)) {
             {
-                sprintf(monbuf, "Invalid expression in value.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in value.\n");
                 monprintf(monbuf);
             }
         }
         if (!dexp_eval(args[3], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -772,21 +786,21 @@ unsigned int SearchResults;
 unsigned int AddressToGBA(uint8_t* mem)
 {
     if (mem >= &g_bios[0] && mem <= &g_bios[0x3fff])
-        return 0x00000000 + (mem - &g_bios[0]);
+        return (unsigned int)(0x00000000 + (mem - &g_bios[0]));
     else if (mem >= &g_workRAM[0] && mem <= &g_workRAM[0x3ffff])
-        return 0x02000000 + (mem - &g_workRAM[0]);
+        return (unsigned int)(0x02000000 + (mem - &g_workRAM[0]));
     else if (mem >= &g_internalRAM[0] && mem <= &g_internalRAM[0x7fff])
-        return 0x03000000 + (mem - &g_internalRAM[0]);
+        return (unsigned int)(0x03000000 + (mem - &g_internalRAM[0]));
     else if (mem >= &g_ioMem[0] && mem <= &g_ioMem[0x3ff])
-        return 0x04000000 + (mem - &g_ioMem[0]);
+        return (unsigned int)(0x04000000 + (mem - &g_ioMem[0]));
     else if (mem >= &g_paletteRAM[0] && mem <= &g_paletteRAM[0x3ff])
-        return 0x05000000 + (mem - &g_paletteRAM[0]);
+        return (unsigned int)(0x05000000 + (mem - &g_paletteRAM[0]));
     else if (mem >= &g_vram[0] && mem <= &g_vram[0x1ffff])
-        return 0x06000000 + (mem - &g_vram[0]);
+        return (unsigned int)(0x06000000 + (mem - &g_vram[0]));
     else if (mem >= &g_oam[0] && mem <= &g_oam[0x3ff])
-        return 0x07000000 + (mem - &g_oam[0]);
+        return (unsigned int)(0x07000000 + (mem - &g_oam[0]));
     else if (mem >= &g_rom[0] && mem <= &g_rom[0x1ffffff])
-        return 0x08000000 + (mem - &g_rom[0]);
+        return (unsigned int)(0x08000000 + (mem - &g_rom[0]));
     else
         return 0xFFFFFFFF;
 };
@@ -876,7 +890,7 @@ void debuggerDoSearch()
                 break;
             };
         default: {
-            sprintf(monbuf, "Search completed.\n");
+            snprintf(monbuf, sizeof(monbuf), "Search completed.\n");
             monprintf(monbuf);
         }
             SearchLength = 0;
@@ -898,7 +912,7 @@ void debuggerDoSearch()
 
             if (p == SearchLength) {
                 {
-                    sprintf(monbuf, "Search result (%d): %08x\n", count + SearchResults, AddressToGBA(start));
+                    snprintf(monbuf, sizeof(monbuf), "Search result (%d): %08x\n", count + SearchResults, AddressToGBA(start));
                     monprintf(monbuf);
                 }
                 count++;
@@ -923,7 +937,7 @@ void debuggerFindText(int n, char** args)
         SearchResults = 0;
         if (!dexp_eval(args[1], &SearchStart)) {
             {
-                sprintf(monbuf, "Invalid expression.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression.\n");
                 monprintf(monbuf);
             }
             return;
@@ -931,16 +945,24 @@ void debuggerFindText(int n, char** args)
 
         if (n == 4) {
             sscanf(args[2], "%u", &SearchMaxMatches);
+#if __STDC_WANT_SECURE_LIB__
+            strncpy_s((char*)SearchData, sizeof(SearchData), args[3], 64);
+#else
             strncpy((char*)SearchData, args[3], 64);
-            SearchLength = strlen(args[3]);
+#endif
+            SearchLength = (unsigned int)strlen(args[3]);
         } else if (n == 3) {
+#if __STDC_WANT_SECURE_LIB__
+            strncpy_s((char*)SearchData, sizeof(SearchData), args[2], 64);
+#else
             strncpy((char*)SearchData, args[2], 64);
-            SearchLength = strlen(args[2]);
+#endif
+            SearchLength = (unsigned int)strlen(args[2]);
         };
 
         if (SearchLength > 64) {
             {
-                sprintf(monbuf, "Entered string (length: %d) is longer than 64 bytes and was cut.\n", SearchLength);
+                snprintf(monbuf, sizeof(monbuf), "Entered string (length: %d) is longer than 64 bytes and was cut.\n", SearchLength);
                 monprintf(monbuf);
             }
             SearchLength = 64;
@@ -958,7 +980,7 @@ void debuggerFindHex(int n, char** args)
         SearchResults = 0;
         if (!dexp_eval(args[1], &SearchStart)) {
             {
-                sprintf(monbuf, "Invalid expression.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression.\n");
                 monprintf(monbuf);
             }
             return;
@@ -967,15 +989,23 @@ void debuggerFindHex(int n, char** args)
         char SearchHex[128];
         if (n == 4) {
             sscanf(args[2], "%u", &SearchMaxMatches);
+#if __STDC_WANT_SECURE_LIB__
+            strncpy_s(SearchHex, sizeof(SearchHex), args[3], 128);
+#else
             strncpy(SearchHex, args[3], 128);
-            SearchLength = strlen(args[3]);
+#endif
+            SearchLength = (unsigned int)strlen(args[3]);
         } else if (n == 3) {
+#if __STDC_WANT_SECURE_LIB__
+            strncpy_s(SearchHex, sizeof(SearchHex), args[2], 128);
+#else
             strncpy(SearchHex, args[2], 128);
-            SearchLength = strlen(args[2]);
+#endif
+            SearchLength = (unsigned int)strlen(args[2]);
         };
 
         if (SearchLength & 1) {
-            sprintf(monbuf, "Unaligned bytecount: %d,5. Last digit (%c) cut.\n", SearchLength / 2, SearchHex[SearchLength - 1]);
+            snprintf(monbuf, sizeof(monbuf), "Unaligned bytecount: %d,5. Last digit (%c) cut.\n", SearchLength / 2, SearchHex[SearchLength - 1]);
             monprintf(monbuf);
         }
 
@@ -983,7 +1013,7 @@ void debuggerFindHex(int n, char** args)
 
         if (SearchLength > 64) {
             {
-                sprintf(monbuf, "Entered string (length: %d) is longer than 64 bytes and was cut.\n", SearchLength);
+                snprintf(monbuf, sizeof(monbuf), "Entered string (length: %d) is longer than 64 bytes and was cut.\n", SearchLength);
                 monprintf(monbuf);
             }
             SearchLength = 64;
@@ -992,7 +1022,7 @@ void debuggerFindHex(int n, char** args)
         for (unsigned int i = 0; i < SearchLength; i++) {
             unsigned int cbuf = 0;
             sscanf(&SearchHex[i << 1], "%02x", &cbuf);
-            SearchData[i] = cbuf;
+            SearchData[i] = (uint8_t)cbuf;
         };
 
         debuggerDoSearch();
@@ -1006,7 +1036,7 @@ void debuggerFindResume(int n, char** args)
     if ((n == 1) || (n == 2)) {
         if (SearchLength == 0) {
             {
-                sprintf(monbuf, "Error: No search in progress. Start a search with ft or fh.\n");
+                snprintf(monbuf, sizeof(monbuf), "Error: No search in progress. Start a search with ft or fh.\n");
                 monprintf(monbuf);
             }
             debuggerUsage("fr");
@@ -1035,7 +1065,7 @@ void debuggerCopyByte(int n, char** args)
     if (n == 5) {
         if (!dexp_eval(args[4], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -1043,21 +1073,21 @@ void debuggerCopyByte(int n, char** args)
     if (n > 3) {
         if (!dexp_eval(args[3], &number)) {
             {
-                sprintf(monbuf, "Invalid expression in number of copy units.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in number of copy units.\n");
                 monprintf(monbuf);
             }
         }
     }
     if (!dexp_eval(args[1], &source)) {
         {
-            sprintf(monbuf, "Invalid expression in source address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in source address.\n");
             monprintf(monbuf);
         }
         return;
     }
     if (!dexp_eval(args[2], &dest)) {
         {
-            sprintf(monbuf, "Invalid expression in destination address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in destination address.\n");
             monprintf(monbuf);
         }
     }
@@ -1083,7 +1113,7 @@ void debuggerCopyHalfWord(int n, char** args)
     if (n == 5) {
         if (!dexp_eval(args[4], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -1091,7 +1121,7 @@ void debuggerCopyHalfWord(int n, char** args)
     if (n > 3) {
         if (!dexp_eval(args[3], &number)) {
             {
-                sprintf(monbuf, "Invalid expression in number of copy units.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in number of copy units.\n");
                 monprintf(monbuf);
             }
         }
@@ -1099,14 +1129,14 @@ void debuggerCopyHalfWord(int n, char** args)
     }
     if (!dexp_eval(args[1], &source)) {
         {
-            sprintf(monbuf, "Invalid expression in source address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in source address.\n");
             monprintf(monbuf);
         }
         return;
     }
     if (!dexp_eval(args[2], &dest)) {
         {
-            sprintf(monbuf, "Invalid expression in destination address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in destination address.\n");
             monprintf(monbuf);
         }
     }
@@ -1132,7 +1162,7 @@ void debuggerCopyWord(int n, char** args)
     if (n == 5) {
         if (!dexp_eval(args[4], &reps)) {
             {
-                sprintf(monbuf, "Invalid expression in repetition number.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in repetition number.\n");
                 monprintf(monbuf);
             }
         }
@@ -1140,7 +1170,7 @@ void debuggerCopyWord(int n, char** args)
     if (n > 3) {
         if (!dexp_eval(args[3], &number)) {
             {
-                sprintf(monbuf, "Invalid expression in number of copy units.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression in number of copy units.\n");
                 monprintf(monbuf);
             }
         }
@@ -1148,14 +1178,14 @@ void debuggerCopyWord(int n, char** args)
     }
     if (!dexp_eval(args[1], &source)) {
         {
-            sprintf(monbuf, "Invalid expression in source address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in source address.\n");
             monprintf(monbuf);
         }
         return;
     }
     if (!dexp_eval(args[2], &dest)) {
         {
-            sprintf(monbuf, "Invalid expression in destination address.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression in destination address.\n");
             monprintf(monbuf);
         }
     }
@@ -1171,71 +1201,71 @@ void debuggerCopyWord(int n, char** args)
 void debuggerIoVideo()
 {
     {
-        sprintf(monbuf, "DISPCNT  = %04x\n", DISPCNT);
+        snprintf(monbuf, sizeof(monbuf), "DISPCNT  = %04x\n", DISPCNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DISPSTAT = %04x\n", DISPSTAT);
+        snprintf(monbuf, sizeof(monbuf), "DISPSTAT = %04x\n", DISPSTAT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "VCOUNT   = %04x\n", VCOUNT);
+        snprintf(monbuf, sizeof(monbuf), "VCOUNT   = %04x\n", VCOUNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG0CNT   = %04x\n", BG0CNT);
+        snprintf(monbuf, sizeof(monbuf), "BG0CNT   = %04x\n", BG0CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG1CNT   = %04x\n", BG1CNT);
+        snprintf(monbuf, sizeof(monbuf), "BG1CNT   = %04x\n", BG1CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2CNT   = %04x\n", BG2CNT);
+        snprintf(monbuf, sizeof(monbuf), "BG2CNT   = %04x\n", BG2CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3CNT   = %04x\n", BG3CNT);
+        snprintf(monbuf, sizeof(monbuf), "BG3CNT   = %04x\n", BG3CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WIN0H    = %04x\n", WIN0H);
+        snprintf(monbuf, sizeof(monbuf), "WIN0H    = %04x\n", WIN0H);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WIN0V    = %04x\n", WIN0V);
+        snprintf(monbuf, sizeof(monbuf), "WIN0V    = %04x\n", WIN0V);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WIN1H    = %04x\n", WIN1H);
+        snprintf(monbuf, sizeof(monbuf), "WIN1H    = %04x\n", WIN1H);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WIN1V    = %04x\n", WIN1V);
+        snprintf(monbuf, sizeof(monbuf), "WIN1V    = %04x\n", WIN1V);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WININ    = %04x\n", WININ);
+        snprintf(monbuf, sizeof(monbuf), "WININ    = %04x\n", WININ);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "WINOUT   = %04x\n", WINOUT);
+        snprintf(monbuf, sizeof(monbuf), "WINOUT   = %04x\n", WINOUT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "MOSAIC   = %04x\n", MOSAIC);
+        snprintf(monbuf, sizeof(monbuf), "MOSAIC   = %04x\n", MOSAIC);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BLDMOD   = %04x\n", BLDMOD);
+        snprintf(monbuf, sizeof(monbuf), "BLDMOD   = %04x\n", BLDMOD);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "COLEV    = %04x\n", COLEV);
+        snprintf(monbuf, sizeof(monbuf), "COLEV    = %04x\n", COLEV);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "COLY     = %04x\n", COLY);
+        snprintf(monbuf, sizeof(monbuf), "COLY     = %04x\n", COLY);
         monprintf(monbuf);
     }
 }
@@ -1243,83 +1273,83 @@ void debuggerIoVideo()
 void debuggerIoVideo2()
 {
     {
-        sprintf(monbuf, "BG0HOFS  = %04x\n", BG0HOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG0HOFS  = %04x\n", BG0HOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG0VOFS  = %04x\n", BG0VOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG0VOFS  = %04x\n", BG0VOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG1HOFS  = %04x\n", BG1HOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG1HOFS  = %04x\n", BG1HOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG1VOFS  = %04x\n", BG1VOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG1VOFS  = %04x\n", BG1VOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2HOFS  = %04x\n", BG2HOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG2HOFS  = %04x\n", BG2HOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2VOFS  = %04x\n", BG2VOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG2VOFS  = %04x\n", BG2VOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3HOFS  = %04x\n", BG3HOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG3HOFS  = %04x\n", BG3HOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3VOFS  = %04x\n", BG3VOFS);
+        snprintf(monbuf, sizeof(monbuf), "BG3VOFS  = %04x\n", BG3VOFS);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2PA    = %04x\n", BG2PA);
+        snprintf(monbuf, sizeof(monbuf), "BG2PA    = %04x\n", BG2PA);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2PB    = %04x\n", BG2PB);
+        snprintf(monbuf, sizeof(monbuf), "BG2PB    = %04x\n", BG2PB);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2PC    = %04x\n", BG2PC);
+        snprintf(monbuf, sizeof(monbuf), "BG2PC    = %04x\n", BG2PC);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2PD    = %04x\n", BG2PD);
+        snprintf(monbuf, sizeof(monbuf), "BG2PD    = %04x\n", BG2PD);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2X     = %08x\n", (BG2X_H << 16) | BG2X_L);
+        snprintf(monbuf, sizeof(monbuf), "BG2X     = %08x\n", (BG2X_H << 16) | BG2X_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG2Y     = %08x\n", (BG2Y_H << 16) | BG2Y_L);
+        snprintf(monbuf, sizeof(monbuf), "BG2Y     = %08x\n", (BG2Y_H << 16) | BG2Y_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3PA    = %04x\n", BG3PA);
+        snprintf(monbuf, sizeof(monbuf), "BG3PA    = %04x\n", BG3PA);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3PB    = %04x\n", BG3PB);
+        snprintf(monbuf, sizeof(monbuf), "BG3PB    = %04x\n", BG3PB);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3PC    = %04x\n", BG3PC);
+        snprintf(monbuf, sizeof(monbuf), "BG3PC    = %04x\n", BG3PC);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3PD    = %04x\n", BG3PD);
+        snprintf(monbuf, sizeof(monbuf), "BG3PD    = %04x\n", BG3PD);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3X     = %08x\n", (BG3X_H << 16) | BG3X_L);
+        snprintf(monbuf, sizeof(monbuf), "BG3X     = %08x\n", (BG3X_H << 16) | BG3X_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "BG3Y     = %08x\n", (BG3Y_H << 16) | BG3Y_L);
+        snprintf(monbuf, sizeof(monbuf), "BG3Y     = %08x\n", (BG3Y_H << 16) | BG3Y_L);
         monprintf(monbuf);
     }
 }
@@ -1327,51 +1357,51 @@ void debuggerIoVideo2()
 void debuggerIoDMA()
 {
     {
-        sprintf(monbuf, "DM0SAD   = %08x\n", (DM0SAD_H << 16) | DM0SAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM0SAD   = %08x\n", (DM0SAD_H << 16) | DM0SAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM0DAD   = %08x\n", (DM0DAD_H << 16) | DM0DAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM0DAD   = %08x\n", (DM0DAD_H << 16) | DM0DAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM0CNT   = %08x\n", (DM0CNT_H << 16) | DM0CNT_L);
+        snprintf(monbuf, sizeof(monbuf), "DM0CNT   = %08x\n", (DM0CNT_H << 16) | DM0CNT_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM1SAD   = %08x\n", (DM1SAD_H << 16) | DM1SAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM1SAD   = %08x\n", (DM1SAD_H << 16) | DM1SAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM1DAD   = %08x\n", (DM1DAD_H << 16) | DM1DAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM1DAD   = %08x\n", (DM1DAD_H << 16) | DM1DAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM1CNT   = %08x\n", (DM1CNT_H << 16) | DM1CNT_L);
+        snprintf(monbuf, sizeof(monbuf), "DM1CNT   = %08x\n", (DM1CNT_H << 16) | DM1CNT_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM2SAD   = %08x\n", (DM2SAD_H << 16) | DM2SAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM2SAD   = %08x\n", (DM2SAD_H << 16) | DM2SAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM2DAD   = %08x\n", (DM2DAD_H << 16) | DM2DAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM2DAD   = %08x\n", (DM2DAD_H << 16) | DM2DAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM2CNT   = %08x\n", (DM2CNT_H << 16) | DM2CNT_L);
+        snprintf(monbuf, sizeof(monbuf), "DM2CNT   = %08x\n", (DM2CNT_H << 16) | DM2CNT_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM3SAD   = %08x\n", (DM3SAD_H << 16) | DM3SAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM3SAD   = %08x\n", (DM3SAD_H << 16) | DM3SAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM3DAD   = %08x\n", (DM3DAD_H << 16) | DM3DAD_L);
+        snprintf(monbuf, sizeof(monbuf), "DM3DAD   = %08x\n", (DM3DAD_H << 16) | DM3DAD_L);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "DM3CNT   = %08x\n", (DM3CNT_H << 16) | DM3CNT_L);
+        snprintf(monbuf, sizeof(monbuf), "DM3CNT   = %08x\n", (DM3CNT_H << 16) | DM3CNT_L);
         monprintf(monbuf);
     }
 }
@@ -1379,35 +1409,35 @@ void debuggerIoDMA()
 void debuggerIoTimer()
 {
     {
-        sprintf(monbuf, "TM0D     = %04x\n", TM0D);
+        snprintf(monbuf, sizeof(monbuf), "TM0D     = %04x\n", TM0D);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM0CNT   = %04x\n", TM0CNT);
+        snprintf(monbuf, sizeof(monbuf), "TM0CNT   = %04x\n", TM0CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM1D     = %04x\n", TM1D);
+        snprintf(monbuf, sizeof(monbuf), "TM1D     = %04x\n", TM1D);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM1CNT   = %04x\n", TM1CNT);
+        snprintf(monbuf, sizeof(monbuf), "TM1CNT   = %04x\n", TM1CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM2D     = %04x\n", TM2D);
+        snprintf(monbuf, sizeof(monbuf), "TM2D     = %04x\n", TM2D);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM2CNT   = %04x\n", TM2CNT);
+        snprintf(monbuf, sizeof(monbuf), "TM2CNT   = %04x\n", TM2CNT);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM3D     = %04x\n", TM3D);
+        snprintf(monbuf, sizeof(monbuf), "TM3D     = %04x\n", TM3D);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "TM3CNT   = %04x\n", TM3CNT);
+        snprintf(monbuf, sizeof(monbuf), "TM3CNT   = %04x\n", TM3CNT);
         monprintf(monbuf);
     }
 }
@@ -1415,19 +1445,19 @@ void debuggerIoTimer()
 void debuggerIoMisc()
 {
     {
-        sprintf(monbuf, "P1       = %04x\n", P1);
+        snprintf(monbuf, sizeof(monbuf), "P1       = %04x\n", P1);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "IE       = %04x\n", IE);
+        snprintf(monbuf, sizeof(monbuf), "IE       = %04x\n", IE);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "IF       = %04x\n", IF);
+        snprintf(monbuf, sizeof(monbuf), "IF       = %04x\n", IF);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "IME      = %04x\n", IME);
+        snprintf(monbuf, sizeof(monbuf), "IME      = %04x\n", IME);
         monprintf(monbuf);
     }
 }
@@ -1449,7 +1479,7 @@ void debuggerIo(int n, char** args)
     else if (!strcmp(args[1], "misc"))
         debuggerIoMisc();
     else {
-        sprintf(monbuf, "Unrecognized option %s\n", args[1]);
+        snprintf(monbuf, sizeof(monbuf), "Unrecognized option %s\n", args[1]);
         monprintf(monbuf);
     }
 }
@@ -1490,7 +1520,7 @@ void debuggerReadCharTable(int n, char** args)
     if (n == 2) {
         if (!canUseTbl) {
             {
-                sprintf(monbuf, "Cannot operate over character table, as it was disabled.\n");
+                snprintf(monbuf, sizeof(monbuf), "Cannot operate over character table, as it was disabled.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1498,15 +1528,20 @@ void debuggerReadCharTable(int n, char** args)
         if (strcmp(args[1], "none") == 0) {
             freeWordSymbol();
             {
-                sprintf(monbuf, "Cleared table. Reverted to ASCII.\n");
+                snprintf(monbuf, sizeof(monbuf), "Cleared table. Reverted to ASCII.\n");
                 monprintf(monbuf);
             }
             return;
         }
+#if __STDC_WANT_SECURE_LIB__
+        FILE* tlb = NULL;
+        fopen_s(&tlb, args[1], "r");
+#else
         FILE* tlb = fopen(args[1], "r");
+#endif
         if (!tlb) {
             {
-                sprintf(monbuf, "Could not open specified file. Abort.\n");
+                snprintf(monbuf, sizeof(monbuf), "Could not open specified file. Abort.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1516,8 +1551,11 @@ void debuggerReadCharTable(int n, char** args)
         char* character = (char*)calloc(10, sizeof(char));
         wordSymbol = (char**)calloc(256, sizeof(char*));
         while (fgets(buffer, 30, tlb)) {
-
+#if __STDC_WANT_SECURE_LIB__
+            sscanf_s(buffer, "%02x=%s", &slot, character, 10);
+#else
             sscanf(buffer, "%02x=%s", &slot, character);
+#endif
 
             if (character[0]) {
                 if (strlen(character) == 4) {
@@ -1540,7 +1578,7 @@ void debuggerReadCharTable(int n, char** args)
                 wordSymbol[slot] = (char*)' ';
 
             if (largestSymbol < strlen(character))
-                largestSymbol = strlen(character);
+                largestSymbol = (uint8_t)strlen(character);
 
             character = (char*)malloc(10);
         }
@@ -1560,23 +1598,23 @@ void printCharGroup(uint32_t addr, bool useAscii)
             int j;
             if (c) {
                 {
-                    sprintf(monbuf, "%s", c);
+                    snprintf(monbuf, sizeof(monbuf), "%s", c);
                     monprintf(monbuf);
                 }
-                j = strlen(c);
+                j = (int)strlen(c);
             } else {
                 j = 0;
             }
             while (j < largestSymbol) {
                 {
-                    sprintf(monbuf, " ");
+                    snprintf(monbuf, sizeof(monbuf), " ");
                     monprintf(monbuf);
                 }
                 j++;
             }
         } else {
             {
-                sprintf(monbuf, "%c", ASCII(debuggerReadByte(addr + i)));
+                snprintf(monbuf, sizeof(monbuf), "%c", ASCII(debuggerReadByte(addr + i)));
                 monprintf(monbuf);
             }
         }
@@ -1590,25 +1628,25 @@ void debuggerMemoryByte(int n, char** args)
 
         if (!dexp_eval(args[1], &addr)) {
             {
-                sprintf(monbuf, "Invalid expression\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression\n");
                 monprintf(monbuf);
             }
             return;
         }
         for (int loop = 0; loop < 16; loop++) {
             {
-                sprintf(monbuf, "%08x ", addr);
+                snprintf(monbuf, sizeof(monbuf), "%08x ", addr);
                 monprintf(monbuf);
             }
             for (int j = 0; j < 16; j++) {
                 {
-                    sprintf(monbuf, "%02x ", debuggerReadByte(addr + j));
+                    snprintf(monbuf, sizeof(monbuf), "%02x ", debuggerReadByte(addr + j));
                     monprintf(monbuf);
                 }
             }
             printCharGroup(addr, true);
             {
-                sprintf(monbuf, "\n");
+                snprintf(monbuf, sizeof(monbuf), "\n");
                 monprintf(monbuf);
             }
             addr += 16;
@@ -1624,7 +1662,7 @@ void debuggerMemoryHalfWord(int n, char** args)
 
         if (!dexp_eval(args[1], &addr)) {
             {
-                sprintf(monbuf, "Invalid expression\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression\n");
                 monprintf(monbuf);
             }
             return;
@@ -1634,18 +1672,18 @@ void debuggerMemoryHalfWord(int n, char** args)
 
         for (int loop = 0; loop < 16; loop++) {
             {
-                sprintf(monbuf, "%08x ", addr);
+                snprintf(monbuf, sizeof(monbuf), "%08x ", addr);
                 monprintf(monbuf);
             }
             for (int j = 0; j < 16; j += 2) {
                 {
-                    sprintf(monbuf, "%02x%02x ", debuggerReadByte(addr + j + 1), debuggerReadByte(addr + j));
+                    snprintf(monbuf, sizeof(monbuf), "%02x%02x ", debuggerReadByte(addr + j + 1), debuggerReadByte(addr + j));
                     monprintf(monbuf);
                 }
             }
             printCharGroup(addr, true);
             {
-                sprintf(monbuf, "\n");
+                snprintf(monbuf, sizeof(monbuf), "\n");
                 monprintf(monbuf);
             }
             addr += 16;
@@ -1660,7 +1698,7 @@ void debuggerMemoryWord(int n, char** args)
         uint32_t addr = 0;
         if (!dexp_eval(args[1], &addr)) {
             {
-                sprintf(monbuf, "Invalid expression\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression\n");
                 monprintf(monbuf);
             }
             return;
@@ -1668,18 +1706,18 @@ void debuggerMemoryWord(int n, char** args)
         addr = addr & 0xfffffffc;
         for (int loop = 0; loop < 16; loop++) {
             {
-                sprintf(monbuf, "%08x ", addr);
+                snprintf(monbuf, sizeof(monbuf), "%08x ", addr);
                 monprintf(monbuf);
             }
             for (int j = 0; j < 16; j += 4) {
                 {
-                    sprintf(monbuf, "%02x%02x%02x%02x ", debuggerReadByte(addr + j + 3), debuggerReadByte(addr + j + 2), debuggerReadByte(addr + j + 1), debuggerReadByte(addr + j));
+                    snprintf(monbuf, sizeof(monbuf), "%02x%02x%02x%02x ", debuggerReadByte(addr + j + 3), debuggerReadByte(addr + j + 2), debuggerReadByte(addr + j + 1), debuggerReadByte(addr + j));
                     monprintf(monbuf);
                 }
             }
             printCharGroup(addr, true);
             {
-                sprintf(monbuf, "\n");
+                snprintf(monbuf, sizeof(monbuf), "\n");
                 monprintf(monbuf);
             }
             addr += 16;
@@ -1695,7 +1733,7 @@ void debuggerStringRead(int n, char** args)
 
         if (!dexp_eval(args[1], &addr)) {
             {
-                sprintf(monbuf, "Invalid expression\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression\n");
                 monprintf(monbuf);
             }
             return;
@@ -1706,31 +1744,31 @@ void debuggerStringRead(int n, char** args)
             if (useWordSymbol) {
                 if (isTerminator[slot]) {
                     {
-                        sprintf(monbuf, "\n");
+                        snprintf(monbuf, sizeof(monbuf), "\n");
                         monprintf(monbuf);
                     }
                     return;
                 } else if (isNewline[slot]) {
                     {
-                        sprintf(monbuf, "\n");
+                        snprintf(monbuf, sizeof(monbuf), "\n");
                         monprintf(monbuf);
                     }
                 } else if (isTab[slot]) {
                     {
-                        sprintf(monbuf, "\t");
+                        snprintf(monbuf, sizeof(monbuf), "\t");
                         monprintf(monbuf);
                     }
                 } else {
                     if (wordSymbol[slot]) {
                         {
-                            sprintf(monbuf, "%s", wordSymbol[slot]);
+                            snprintf(monbuf, sizeof(monbuf), "%s", wordSymbol[slot]);
                             monprintf(monbuf);
                         }
                     }
                 }
             } else {
                 {
-                    sprintf(monbuf, "%c", ASCII(slot));
+                    snprintf(monbuf, sizeof(monbuf), "%c", ASCII(slot));
                     monprintf(monbuf);
                 }
             }
@@ -1742,23 +1780,23 @@ void debuggerStringRead(int n, char** args)
 void debuggerRegisters(int, char**)
 {
     {
-        sprintf(monbuf, "R00=%08x R04=%08x R08=%08x R12=%08x\n", reg[0].I, reg[4].I, reg[8].I, reg[12].I);
+        snprintf(monbuf, sizeof(monbuf), "R00=%08x R04=%08x R08=%08x R12=%08x\n", reg[0].I, reg[4].I, reg[8].I, reg[12].I);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "R01=%08x R05=%08x R09=%08x R13=%08x\n", reg[1].I, reg[5].I, reg[9].I, reg[13].I);
+        snprintf(monbuf, sizeof(monbuf), "R01=%08x R05=%08x R09=%08x R13=%08x\n", reg[1].I, reg[5].I, reg[9].I, reg[13].I);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "R02=%08x R06=%08x R10=%08x R14=%08x\n", reg[2].I, reg[6].I, reg[10].I, reg[14].I);
+        snprintf(monbuf, sizeof(monbuf), "R02=%08x R06=%08x R10=%08x R14=%08x\n", reg[2].I, reg[6].I, reg[10].I, reg[14].I);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "R03=%08x R07=%08x R11=%08x R15=%08x\n", reg[3].I, reg[7].I, reg[11].I, reg[15].I);
+        snprintf(monbuf, sizeof(monbuf), "R03=%08x R07=%08x R11=%08x R15=%08x\n", reg[3].I, reg[7].I, reg[11].I, reg[15].I);
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "CPSR=%08x (%c%c%c%c%c%c%c Mode: %02x)\n",
+        snprintf(monbuf, sizeof(monbuf), "CPSR=%08x (%c%c%c%c%c%c%c Mode: %02x)\n",
             reg[16].I,
             (N_FLAG ? 'N' : '.'),
             (Z_FLAG ? 'Z' : '.'),
@@ -1776,7 +1814,7 @@ void debuggerExecuteCommands(int n, char** args)
 {
     if (n == 1) {
         {
-            sprintf(monbuf, "%s requires at least one pathname to execute.", args[0]);
+            snprintf(monbuf, sizeof(monbuf), "%s requires at least one pathname to execute.", args[0]);
             monprintf(monbuf);
         }
         return;
@@ -1785,7 +1823,12 @@ void debuggerExecuteCommands(int n, char** args)
         n--;
         args++;
         while (n) {
+#if __STDC_WANT_SECURE_LIB__
+            FILE* toExec = NULL;
+            fopen_s(&toExec, args[0], "r");
+#else
             FILE* toExec = fopen(args[0], "r");
+#endif
             if (toExec) {
                 while (fgets(buffer, 4096, toExec)) {
                     std::string buf(buffer);
@@ -1795,7 +1838,7 @@ void debuggerExecuteCommands(int n, char** args)
                     }
                 }
             } else {
-                sprintf(monbuf, "Could not open %s. Will not be executed.\n", args[0]);
+                snprintf(monbuf, sizeof(monbuf), "Could not open %s. Will not be executed.\n", args[0]);
                 monprintf(monbuf);
             }
 
@@ -1826,13 +1869,13 @@ void debuggerSetRadix(int argc, char** argv)
         default:
             error = true;
             {
-                sprintf(monbuf, "Unknown radix %d. Valid values are 8, 10 and 16.\n", r);
+                snprintf(monbuf, sizeof(monbuf), "Unknown radix %d. Valid values are 8, 10 and 16.\n", r);
                 monprintf(monbuf);
             }
             break;
         }
         if (!error) {
-            sprintf(monbuf, "Radix set to %d\n", r);
+            snprintf(monbuf, sizeof(monbuf), "Radix set to %d\n", r);
             monprintf(monbuf);
         }
     }
@@ -1850,15 +1893,15 @@ void debuggerSymbols(int argc, char** argv)
 
     if (argc == 2) {
         match = true;
-        matchSize = strlen(argv[1]);
+        matchSize = (int)strlen(argv[1]);
         matchStr = argv[1];
     }
     {
-        sprintf(monbuf, "Symbol               Value    Size     Type   \n");
+        snprintf(monbuf, sizeof(monbuf), "Symbol               Value    Size     Type   \n");
         monprintf(monbuf);
     }
     {
-        sprintf(monbuf, "-------------------- -------  -------- -------\n");
+        snprintf(monbuf, sizeof(monbuf), "-------------------- -------  -------- -------\n");
         monprintf(monbuf);
     }
     const char* s = NULL;
@@ -1883,7 +1926,7 @@ void debuggerSymbols(int argc, char** argv)
                 break;
             }
             {
-                sprintf(monbuf, "%-20s %08x %08x %-7s\n", s, value, size, ts);
+                snprintf(monbuf, sizeof(monbuf), "%-20s %08x %08x %-7s\n", s, value, size, ts);
                 monprintf(monbuf);
             }
         }
@@ -1912,7 +1955,7 @@ void debuggerVar(int n, char** args)
 
         if (n < 4) {
             {
-                sprintf(monbuf, "No expression specified.\n");
+                snprintf(monbuf, sizeof(monbuf), "No expression specified.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1920,7 +1963,7 @@ void debuggerVar(int n, char** args)
 
         if (!dexp_eval(args[3], &val)) {
             {
-                sprintf(monbuf, "Invalid expression.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1928,7 +1971,7 @@ void debuggerVar(int n, char** args)
 
         dexp_setVar(args[2], val);
         {
-            sprintf(monbuf, "%s = $%08x\n", args[2], val);
+            snprintf(monbuf, sizeof(monbuf), "%s = $%08x\n", args[2], val);
             monprintf(monbuf);
         }
         return;
@@ -1942,7 +1985,7 @@ void debuggerVar(int n, char** args)
     if (strcmp(args[1], "save") == 0) {
         if (n < 3) {
             {
-                sprintf(monbuf, "No file specified.\n");
+                snprintf(monbuf, sizeof(monbuf), "No file specified.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1954,7 +1997,7 @@ void debuggerVar(int n, char** args)
     if (strcmp(args[1], "load") == 0) {
         if (n < 3) {
             {
-                sprintf(monbuf, "No file specified.\n");
+                snprintf(monbuf, sizeof(monbuf), "No file specified.\n");
                 monprintf(monbuf);
             }
             return;
@@ -1964,7 +2007,7 @@ void debuggerVar(int n, char** args)
     }
 
     {
-        sprintf(monbuf, "Unrecognized sub-command.\n");
+        snprintf(monbuf, sizeof(monbuf), "Unrecognized sub-command.\n");
         monprintf(monbuf);
     }
 }
@@ -1980,7 +2023,7 @@ bool debuggerBreakOnExecution(uint32_t address, uint8_t state)
         return false;
 
     {
-        sprintf(monbuf, "Breakpoint (on %s) address %08x\n", (armState ? "ARM" : "Thumb"), address);
+        snprintf(monbuf, sizeof(monbuf), "Breakpoint (on %s) address %08x\n", (armState ? "ARM" : "Thumb"), address);
         monprintf(monbuf);
     }
     debugger = true;
@@ -2062,7 +2105,7 @@ uint8_t getFlags(char* flagName)
 {
 
     for (int i = 0; flagName[i] != '\0'; i++) {
-        flagName[i] = toupper(flagName[i]);
+        flagName[i] = (char)toupper(flagName[i]);
     }
 
     if (strcmp(flagName, "ALWAYS") == 0) {
@@ -2109,26 +2152,26 @@ void debuggerBreakRegister(int n, char** args)
 {
     if (n != 3) {
         {
-            sprintf(monbuf, "Incorrect usage of breg. Correct usage is breg <register> {flag} {value}\n");
+            snprintf(monbuf, sizeof(monbuf), "Incorrect usage of breg. Correct usage is breg <register> {flag} {value}\n");
             monprintf(monbuf);
         }
         printFlagHelp();
         return;
     }
-    uint8_t reg = (uint8_t)getRegisterNumber(args[0]);
+    uint8_t _reg = (uint8_t)getRegisterNumber(args[0]);
     uint8_t flag = getFlags(args[1]);
     uint32_t value;
     if (!dexp_eval(args[2], &value)) {
         {
-            sprintf(monbuf, "Invalid expression.\n");
+            snprintf(monbuf, sizeof(monbuf), "Invalid expression.\n");
             monprintf(monbuf);
         }
         return;
     }
     if (flag != 0) {
-        addBreakRegToList(reg, flag, value);
+        addBreakRegToList(_reg, flag, value);
         {
-            sprintf(monbuf, "Added breakpoint on register R%02d, value %08x\n", reg, value);
+            snprintf(monbuf, sizeof(monbuf), "Added breakpoint on register R%02d, value %08x\n", _reg, value);
             monprintf(monbuf);
         }
     }
@@ -2142,14 +2185,14 @@ void debuggerBreakRegisterClear(int n, char** args)
         if (r >= 0) {
             clearParticularRegListBreaks(r);
             {
-                sprintf(monbuf, "Cleared all Register breakpoints for %s.\n", args[0]);
+                snprintf(monbuf, sizeof(monbuf), "Cleared all Register breakpoints for %s.\n", args[0]);
                 monprintf(monbuf);
             }
         }
     } else {
         clearBreakRegList();
         {
-            sprintf(monbuf, "Cleared all Register breakpoints.\n");
+            snprintf(monbuf, sizeof(monbuf), "Cleared all Register breakpoints.\n");
             monprintf(monbuf);
         }
     }
@@ -2159,7 +2202,7 @@ void debuggerBreakRegisterDelete(int n, char** args)
 {
     if (n < 2) {
         {
-            sprintf(monbuf, "Illegal use of Break register delete:\n Correct usage requires <register> <breakpointNo>.\n");
+            snprintf(monbuf, sizeof(monbuf), "Illegal use of Break register delete:\n Correct usage requires <register> <breakpointNo>.\n");
             monprintf(monbuf);
         }
         return;
@@ -2167,7 +2210,7 @@ void debuggerBreakRegisterDelete(int n, char** args)
     int r = getRegisterNumber(args[0]);
     if ((r < 0) || (r > 16)) {
         {
-            sprintf(monbuf, "Could not find a correct register number:\n Correct usage requires <register> <breakpointNo>.\n");
+            snprintf(monbuf, sizeof(monbuf), "Could not find a correct register number:\n Correct usage requires <register> <breakpointNo>.\n");
             monprintf(monbuf);
         }
         return;
@@ -2175,14 +2218,14 @@ void debuggerBreakRegisterDelete(int n, char** args)
     uint32_t num;
     if (!dexp_eval(args[1], &num)) {
         {
-            sprintf(monbuf, "Could not parse the breakpoint number:\n Correct usage requires <register> <breakpointNo>.\n");
+            snprintf(monbuf, sizeof(monbuf), "Could not parse the breakpoint number:\n Correct usage requires <register> <breakpointNo>.\n");
             monprintf(monbuf);
         }
         return;
     }
-    deleteFromBreakRegList(r, num);
+    deleteFromBreakRegList((uint8_t)r, num);
     {
-        sprintf(monbuf, "Deleted Breakpoint %d of regsiter %s.\n", num, args[0]);
+        snprintf(monbuf, sizeof(monbuf), "Deleted Breakpoint %d of regsiter %s.\n", num, args[0]);
         monprintf(monbuf);
     }
 }
@@ -2379,20 +2422,20 @@ void printCondition(struct ConditionalBreakNode* toPrint)
         const char* secondType = typeMapping[(toPrint->exp_type_flags >> 4) & 0x7];
         const char* operand = compareFlagMapping[toPrint->cond_flags & 0x7];
         {
-            sprintf(monbuf, "%s %s %s%s %s %s", firstType, toPrint->address,
+            snprintf(monbuf, sizeof(monbuf), "%s %s %s%s %s %s", firstType, toPrint->address,
                 ((toPrint->cond_flags & 8) ? "s" : ""), operand,
                 secondType, toPrint->value);
             monprintf(monbuf);
         }
         if (toPrint->next) {
             {
-                sprintf(monbuf, " &&\n\t\t");
+                snprintf(monbuf, sizeof(monbuf), " &&\n\t\t");
                 monprintf(monbuf);
             }
             printCondition(toPrint->next);
         } else {
             {
-                sprintf(monbuf, "\n");
+                snprintf(monbuf, sizeof(monbuf), "\n");
                 monprintf(monbuf);
             }
             return;
@@ -2404,11 +2447,11 @@ void printConditionalBreak(struct ConditionalBreak* toPrint, bool printAddress)
 {
     if (toPrint) {
         if (printAddress) {
-            sprintf(monbuf, "At %08x, ", toPrint->break_address);
+            snprintf(monbuf, sizeof(monbuf), "At %08x, ", toPrint->break_address);
             monprintf(monbuf);
         }
         if (toPrint->type_flags & 0xf0) {
-            sprintf(monbuf, "Break Always on");
+            snprintf(monbuf, sizeof(monbuf), "Break Always on");
             monprintf(monbuf);
         }
         bool hasPrevCond = false;
@@ -2416,13 +2459,13 @@ void printConditionalBreak(struct ConditionalBreak* toPrint, bool printAddress)
         while (flgs != 0) {
             if (toPrint->type_flags & flgs) {
                 if (hasPrevCond) {
-                    sprintf(monbuf, ",");
+                    snprintf(monbuf, sizeof(monbuf), ",");
                     monprintf(monbuf);
                 }
                 for (int i = 0; i < 9; i++) {
                     if (breakFlagMapping[i].value == flgs) {
                         {
-                            sprintf(monbuf, "\t%s", breakFlagMapping[i].mapping);
+                            snprintf(monbuf, sizeof(monbuf), "\t%s", breakFlagMapping[i].mapping);
                             monprintf(monbuf);
                         }
                         hasPrevCond = true;
@@ -2432,26 +2475,26 @@ void printConditionalBreak(struct ConditionalBreak* toPrint, bool printAddress)
             flgs = flgs >> 1;
             if ((flgs == 0x8) && (toPrint->type_flags & 0xf)) {
                 {
-                    sprintf(monbuf, "\n\t\tBreak conditional on");
+                    snprintf(monbuf, sizeof(monbuf), "\n\t\tBreak conditional on");
                     monprintf(monbuf);
                 }
                 hasPrevCond = false;
             }
         }
         {
-            sprintf(monbuf, "\n");
+            snprintf(monbuf, sizeof(monbuf), "\n");
             monprintf(monbuf);
         }
         if (toPrint->type_flags & 0xf && toPrint->firstCond) {
             {
-                sprintf(monbuf, "With conditions:\n\t\t");
+                snprintf(monbuf, sizeof(monbuf), "With conditions:\n\t\t");
                 monprintf(monbuf);
             }
             printCondition(toPrint->firstCond);
         } else if (toPrint->type_flags & 0xf) {
             //should not happen
             {
-                sprintf(monbuf, "No conditions detected, but conditional. Assumed always by default.\n");
+                snprintf(monbuf, sizeof(monbuf), "No conditions detected, but conditional. Assumed always by default.\n");
                 monprintf(monbuf);
             }
         }
@@ -2465,18 +2508,18 @@ void printAllConditionals()
 
         if (conditionals[i] != NULL) {
             {
-                sprintf(monbuf, "Address range 0x%02x000000 breaks:\n", i);
+                snprintf(monbuf, sizeof(monbuf), "Address range 0x%02x000000 breaks:\n", i);
                 monprintf(monbuf);
             }
             {
-                sprintf(monbuf, "-------------------------\n");
+                snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                 monprintf(monbuf);
             }
             struct ConditionalBreak* base = conditionals[i];
             int count = 1;
             uint32_t lastAddress = base->break_address;
             {
-                sprintf(monbuf, "Address %08x\n-------------------------\n", lastAddress);
+                snprintf(monbuf, sizeof(monbuf), "Address %08x\n-------------------------\n", lastAddress);
                 monprintf(monbuf);
             }
             while (base) {
@@ -2484,16 +2527,16 @@ void printAllConditionals()
                     lastAddress = base->break_address;
                     count = 1;
                     {
-                        sprintf(monbuf, "-------------------------\n");
+                        snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                         monprintf(monbuf);
                     }
                     {
-                        sprintf(monbuf, "Address %08x\n-------------------------\n", lastAddress);
+                        snprintf(monbuf, sizeof(monbuf), "Address %08x\n-------------------------\n", lastAddress);
                         monprintf(monbuf);
                     }
                 }
                 {
-                    sprintf(monbuf, "No.%d\t-->\t", count);
+                    snprintf(monbuf, sizeof(monbuf), "No.%d\t-->\t", count);
                     monprintf(monbuf);
                 }
                 printConditionalBreak(base, false);
@@ -2513,12 +2556,12 @@ uint8_t printConditionalsFromAddress(uint32_t address)
             if (address == base->break_address) {
                 if (count == 1) {
                     {
-                        sprintf(monbuf, "Address %08x\n-------------------------\n", address);
+                        snprintf(monbuf, sizeof(monbuf), "Address %08x\n-------------------------\n", address);
                         monprintf(monbuf);
                     }
                 }
                 {
-                    sprintf(monbuf, "No.%d\t-->\t", count);
+                    snprintf(monbuf, sizeof(monbuf), "No.%d\t-->\t", count);
                     monprintf(monbuf);
                 }
                 printConditionalBreak(base, false);
@@ -2531,7 +2574,7 @@ uint8_t printConditionalsFromAddress(uint32_t address)
     }
     if (count == 1) {
         {
-            sprintf(monbuf, "None\n");
+            snprintf(monbuf, sizeof(monbuf), "None\n");
             monprintf(monbuf);
         }
     }
@@ -2559,22 +2602,22 @@ void printAllFlagConditionals(uint8_t flag, bool orMode)
                     if (actualCount == 1) {
                         if (isCondStart) {
                             {
-                                sprintf(monbuf, "Address range 0x%02x000000 breaks:\n", i);
+                                snprintf(monbuf, sizeof(monbuf), "Address range 0x%02x000000 breaks:\n", i);
                                 monprintf(monbuf);
                             }
                             {
-                                sprintf(monbuf, "-------------------------\n");
+                                snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                                 monprintf(monbuf);
                             }
                             isCondStart = false;
                         }
                         {
-                            sprintf(monbuf, "Address %08x\n-------------------------\n", lastAddress);
+                            snprintf(monbuf, sizeof(monbuf), "Address %08x\n-------------------------\n", lastAddress);
                             monprintf(monbuf);
                         }
                     }
                     {
-                        sprintf(monbuf, "No.%d\t-->\t", count);
+                        snprintf(monbuf, sizeof(monbuf), "No.%d\t-->\t", count);
                         monprintf(monbuf);
                     }
                     printConditionalBreak(base, false);
@@ -2608,22 +2651,22 @@ void printAllFlagConditionalsWithAddress(uint32_t address, uint8_t flag, bool or
                     if (actualCount == 1) {
                         if (isCondStart) {
                             {
-                                sprintf(monbuf, "Address range 0x%02x000000 breaks:\n", i);
+                                snprintf(monbuf, sizeof(monbuf), "Address range 0x%02x000000 breaks:\n", i);
                                 monprintf(monbuf);
                             }
                             {
-                                sprintf(monbuf, "-------------------------\n");
+                                snprintf(monbuf, sizeof(monbuf), "-------------------------\n");
                                 monprintf(monbuf);
                             }
                             isCondStart = false;
                         }
                         {
-                            sprintf(monbuf, "Address %08x\n-------------------------\n", lastAddress);
+                            snprintf(monbuf, sizeof(monbuf), "Address %08x\n-------------------------\n", lastAddress);
                             monprintf(monbuf);
                         }
                     }
                     {
-                        sprintf(monbuf, "No.%d\t-->\t", count);
+                        snprintf(monbuf, sizeof(monbuf), "No.%d\t-->\t", count);
                         monprintf(monbuf);
                     }
                     printConditionalBreak(base, false);
@@ -2666,14 +2709,14 @@ void deleteBreak(uint32_t address, uint8_t flags, char** expression, int howToDe
             uint32_t number = 0;
             if (!dexp_eval(expression[0], &number)) {
                 {
-                    sprintf(monbuf, "Invalid expression for number format.\n");
+                    snprintf(monbuf, sizeof(monbuf), "Invalid expression for number format.\n");
                     monprintf(monbuf);
                 }
                 return;
             }
             removeFlagFromConditionalBreakNo(address, (uint8_t)number, (flags | (flags >> 4)));
             {
-                sprintf(monbuf, "Removed all specified breaks from %08x.\n", address);
+                snprintf(monbuf, sizeof(monbuf), "Removed all specified breaks from %08x.\n", address);
                 monprintf(monbuf);
             }
             return;
@@ -2681,14 +2724,14 @@ void deleteBreak(uint32_t address, uint8_t flags, char** expression, int howToDe
         removeConditionalWithAddressAndFlag(address, flags, applyOr);
         removeConditionalWithAddressAndFlag(address, flags << 4, applyOr);
         {
-            sprintf(monbuf, "Removed all specified breaks from %08x.\n", address);
+            snprintf(monbuf, sizeof(monbuf), "Removed all specified breaks from %08x.\n", address);
             monprintf(monbuf);
         }
     } else {
         removeConditionalWithAddressAndFlag(address, flags, applyOr);
         removeConditionalWithAddressAndFlag(address, flags << 4, applyOr);
         {
-            sprintf(monbuf, "Removed all specified breaks from %08x.\n", address);
+            snprintf(monbuf, sizeof(monbuf), "Removed all specified breaks from %08x.\n", address);
             monprintf(monbuf);
         }
     }
@@ -2706,7 +2749,7 @@ void clearBreaks(uint32_t address, uint8_t flags, char** expression, int howToCl
         removeConditionalWithFlag(flags << 4, false);
     }
     {
-        sprintf(monbuf, "Cleared all requested breaks.\n");
+        snprintf(monbuf, sizeof(monbuf), "Cleared all requested breaks.\n");
         monprintf(monbuf);
     }
 }
@@ -2721,7 +2764,7 @@ void listBreaks(uint32_t address, uint8_t flags, char** expression, int howToLis
         printAllFlagConditionals(flags, true);
     }
     {
-        sprintf(monbuf, "\n");
+        snprintf(monbuf, sizeof(monbuf), "\n");
         monprintf(monbuf);
     }
 }
@@ -2729,7 +2772,7 @@ void listBreaks(uint32_t address, uint8_t flags, char** expression, int howToLis
 void executeBreakCommands(int n, char** cmd)
 {
     char* command = cmd[0];
-    int len = strlen(command);
+    int len = (int)strlen(command);
     bool changed = false;
     if (len <= 4) {
         command = breakSymbolCombo(command, &len);
@@ -2758,7 +2801,7 @@ void executeBreakCommands(int n, char** cmd)
     if (command[2] == '0') {
         if (n <= 0) {
             {
-                sprintf(monbuf, "Invalid break command.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid break command.\n");
                 monprintf(monbuf);
             }
             free(command);
@@ -2766,7 +2809,7 @@ void executeBreakCommands(int n, char** cmd)
         }
 
         for (int i = 0; cmd[0][i]; i++) {
-            cmd[0][i] = tolower(cmd[0][i]);
+            cmd[0][i] = (char)tolower(cmd[0][i]);
         }
         const char* replaced = replaceAlias(cmd[0], breakAliasTable);
         if (replaced == cmd[0]) {
@@ -2786,7 +2829,7 @@ void executeBreakCommands(int n, char** cmd)
     if (command[4] == '0') {
         if (n <= 0) {
             {
-                sprintf(monbuf, "Invalid break command.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid break command.\n");
                 monprintf(monbuf);
             }
             free(command);
@@ -2794,7 +2837,7 @@ void executeBreakCommands(int n, char** cmd)
         }
 
         for (int i = 0; cmd[0][i]; i++) {
-            cmd[0][i] = tolower(cmd[0][i]);
+            cmd[0][i] = (char)tolower(cmd[0][i]);
         }
         ope = replaceAlias(cmd[0], breakAliasTable)[0];
         if ((ope == 'c') || (ope == 'd') || (ope == 'l') || (ope == 'm')) {
@@ -2872,7 +2915,7 @@ void executeBreakCommands(int n, char** cmd)
     if ((n >= 1) && (operation != clearBreaks)) {
         if (!dexp_eval(cmd[0], &address)) {
             {
-                sprintf(monbuf, "Invalid expression for address format.\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid expression for address format.\n");
                 monprintf(monbuf);
             }
             return;
@@ -2894,22 +2937,22 @@ void executeBreakCommands(int n, char** cmd)
         }
     } else if (!hasAddress && (operation == deleteBreak)) {
         {
-            sprintf(monbuf, "Delete breakpoint operation requires at least one address;\n");
+            snprintf(monbuf, sizeof(monbuf), "Delete breakpoint operation requires at least one address;\n");
             monprintf(monbuf);
         }
         {
-            sprintf(monbuf, "Usage: break [type] delete [address] no.[number] --> Deletes breakpoint [number] of [address].\n");
+            snprintf(monbuf, sizeof(monbuf), "Usage: break [type] delete [address] no.[number] --> Deletes breakpoint [number] of [address].\n");
             monprintf(monbuf);
         }
-        //{ sprintf(monbuf, "Usage: [delete Operand] [address] End [address] --> Deletes range between [address] and [end]\n"); monprintf(monbuf); }
+        //{ snprintf(monbuf, sizeof(monbuf), "Usage: [delete Operand] [address] End [address] --> Deletes range between [address] and [end]\n"); monprintf(monbuf); }
         {
-            sprintf(monbuf, "Usage: break [type] delete [address]\n --> Deletes all breakpoints of [type] on [address].");
+            snprintf(monbuf, sizeof(monbuf), "Usage: break [type] delete [address]\n --> Deletes all breakpoints of [type] on [address].");
             monprintf(monbuf);
         }
         return;
     } else if (!hasAddress && (operation == makeBreak)) {
         {
-            sprintf(monbuf, "Can only create breakpoints if an address is provided");
+            snprintf(monbuf, sizeof(monbuf), "Can only create breakpoints if an address is provided");
             monprintf(monbuf);
         }
         //print usage here
@@ -2947,25 +2990,25 @@ void debuggerDisable(int n, char** args)
     while (n > 1) {
         int i = 0;
         while (args[3 - n][i]) {
-            args[3 - n][i] = tolower(args[2 - n][i]);
+            args[3 - n][i] = (char)tolower(args[2 - n][i]);
             i++;
         }
         if (strcmp(args[3 - n], "breg")) {
             enableRegBreak = false;
             {
-                sprintf(monbuf, "Break on register disabled.\n");
+                snprintf(monbuf, sizeof(monbuf), "Break on register disabled.\n");
                 monprintf(monbuf);
             }
         } else if (strcmp(args[3 - n], "tbl")) {
             canUseTbl = false;
             useWordSymbol = false;
             {
-                sprintf(monbuf, "Symbol table disabled.\n");
+                snprintf(monbuf, sizeof(monbuf), "Symbol table disabled.\n");
                 monprintf(monbuf);
             }
         } else {
             {
-                sprintf(monbuf, "Invalid command. Only tbl and breg are accepted as commands\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid command. Only tbl and breg are accepted as commands\n");
                 monprintf(monbuf);
             }
             return;
@@ -2983,25 +3026,25 @@ void debuggerEnable(int n, char** args)
     while (n > 1) {
         int i = 0;
         while (args[3 - n][i]) {
-            args[3 - n][i] = tolower(args[2 - n][i]);
+            args[3 - n][i] = (char)tolower(args[2 - n][i]);
             i++;
         }
         if (strcmp(args[3 - n], "breg")) {
             enableRegBreak = true;
             {
-                sprintf(monbuf, "Break on register enabled.\n");
+                snprintf(monbuf, sizeof(monbuf), "Break on register enabled.\n");
                 monprintf(monbuf);
             }
         } else if (strcmp(args[3 - n], "tbl")) {
             canUseTbl = true;
             useWordSymbol = thereIsATable;
             {
-                sprintf(monbuf, "Symbol table enabled.\n");
+                snprintf(monbuf, sizeof(monbuf), "Symbol table enabled.\n");
                 monprintf(monbuf);
             }
         } else {
             {
-                sprintf(monbuf, "Invalid command. Only tbl and breg are accepted as commands\n");
+                snprintf(monbuf, sizeof(monbuf), "Invalid command. Only tbl and breg are accepted as commands\n");
                 monprintf(monbuf);
             }
             return;
@@ -3231,7 +3274,7 @@ void debuggerUsage(const char* cmd)
     for (int i = 0;; i++) {
         if (debuggerCommands[i].name) {
             if (!strcmp(debuggerCommands[i].name, cmd)) {
-                sprintf(monbuf, "%s %s\t%s\n",
+                snprintf(monbuf, sizeof(monbuf), "%s %s\t%s\n",
                     debuggerCommands[i].name,
                     debuggerCommands[i].syntax ? debuggerCommands[i].syntax : "",
                     debuggerCommands[i].help);
@@ -3240,7 +3283,7 @@ void debuggerUsage(const char* cmd)
             }
         } else {
             {
-                sprintf(monbuf, "Unrecognized command '%s'.", cmd);
+                snprintf(monbuf, sizeof(monbuf), "Unrecognized command '%s'.", cmd);
                 monprintf(monbuf);
             }
             break;
@@ -3256,14 +3299,14 @@ void debuggerHelp(int n, char** args)
         for (int i = 0;; i++) {
             if (debuggerCommands[i].name) {
                 {
-                    sprintf(monbuf, "%-10s%s\n", debuggerCommands[i].name, debuggerCommands[i].help);
+                    snprintf(monbuf, sizeof(monbuf), "%-10s%s\n", debuggerCommands[i].name, debuggerCommands[i].help);
                     monprintf(monbuf);
                 }
             } else
                 break;
         }
         {
-            sprintf(monbuf, "%-10s%s\n", "break", "Breakpoint commands");
+            snprintf(monbuf, sizeof(monbuf), "%-10s%s\n", "break", "Breakpoint commands");
             monprintf(monbuf);
         }
     }
@@ -3343,7 +3386,7 @@ void dbgExecute(char* toRun)
     //first, convert the command name to a standart lowercase form
     //if more lowercasing needed, do it on the caller.
     for (int i = 0; commands[0][i]; i++) {
-        commands[0][i] = tolower(commands[0][i]);
+        commands[0][i] = (char)tolower(commands[0][i]);
     }
 
     // checks if it is a quit command, if so quits.
@@ -3369,7 +3412,7 @@ void dbgExecute(char* toRun)
     for (int j = 0;; j++) {
         if (debuggerCommands[j].name == NULL) {
             {
-                sprintf(monbuf, "Unrecognized command %s. Type h for help.\n", commands[0]);
+                snprintf(monbuf, sizeof(monbuf), "Unrecognized command %s. Type h for help.\n", commands[0]);
                 monprintf(monbuf);
             }
             return;
@@ -3384,7 +3427,11 @@ void dbgExecute(char* toRun)
 void dbgExecute(std::string& cmd)
 {
     char* dbgCmd = new char[cmd.length() + 1];
+#if __STDC_WANT_SECURE_LIB__
+    strcpy_s(dbgCmd, cmd.length() + 1, cmd.c_str());
+#else
     strcpy(dbgCmd, cmd.c_str());
+#endif
     dbgExecute(dbgCmd);
     delete[] dbgCmd;
 }
@@ -3404,7 +3451,12 @@ bool remoteTcpInit()
     if (remoteSocket == -1) {
 #ifdef _WIN32
         WSADATA wsaData;
+#ifdef _DEBUG
         int error = WSAStartup(MAKEWORD(1, 1), &wsaData);
+        fprintf(stderr, "WSAStartup: %d\n", error);
+#else
+        WSAStartup(MAKEWORD(1, 1), &wsaData);
+#endif
 #endif // _WIN32
         SOCKET s = socket(PF_INET, SOCK_STREAM, 0);
 
@@ -3425,7 +3477,7 @@ bool remoteTcpInit()
 
         sockaddr_in addr;
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(remotePort);
+        addr.sin_port = htons((unsigned short)remotePort);
         addr.sin_addr.s_addr = htonl(0);
         int count = 0;
         while (count < 3) {
@@ -3459,7 +3511,10 @@ bool remoteTcpInit()
                 ntohs(addr.sin_port));
         } else {
 #ifdef _WIN32
-            int error = WSAGetLastError();
+#ifdef _DEBUG
+            int _error = WSAGetLastError();
+            fprintf(stderr, "WSA Error: %d\n", _error);
+#endif
 #endif // _WIN32
         }
         //char dummy;
@@ -3479,12 +3534,12 @@ void remoteTcpCleanUp()
     if (remoteSocket > 0) {
         fprintf(stderr, "Closing remote socket\n");
         close(remoteSocket);
-        remoteSocket = -1;
+        remoteSocket = (SOCKET)(-1);
     }
     if (remoteListenSocket > 0) {
         fprintf(stderr, "Closing listen socket\n");
         close(remoteListenSocket);
-        remoteListenSocket = -1;
+        remoteListenSocket = (SOCKET)(-1);
     }
 }
 
@@ -3590,7 +3645,7 @@ void remoteOutput(const char* s, uint32_t addr)
     if (s) {
         char c = *s++;
         while (c) {
-            sprintf(d, "%02x", c);
+            snprintf(d, sizeof(buffer), "%02x", c);
             d += 2;
             c = *s++;
         }
@@ -3598,7 +3653,7 @@ void remoteOutput(const char* s, uint32_t addr)
         char c = debuggerReadByte(addr);
         addr++;
         while (c) {
-            sprintf(d, "%02x", c);
+            snprintf(d, sizeof(buffer), "%02x", c);
             d += 2;
             c = debuggerReadByte(addr);
             addr++;
@@ -3611,19 +3666,19 @@ void remoteOutput(const char* s, uint32_t addr)
 void remoteSendSignal()
 {
     char buffer[1024];
-    sprintf(buffer, "S%02x", remoteSignal);
+    snprintf(buffer, sizeof(buffer), "S%02x", remoteSignal);
     remotePutPacket(buffer);
 }
 
 void remoteSendStatus()
 {
     char buffer[1024];
-    sprintf(buffer, "T%02x", remoteSignal);
+    snprintf(buffer, sizeof(buffer), "T%02x", remoteSignal);
     char* s = buffer;
     s += 3;
     for (int i = 0; i < 15; i++) {
         uint32_t v = reg[i].I;
-        sprintf(s, "%02x:%02x%02x%02x%02x;", i,
+        snprintf(s, sizeof(buffer), "%02x:%02x%02x%02x%02x;", i,
             (v & 255),
             (v >> 8) & 255,
             (v >> 16) & 255,
@@ -3631,14 +3686,14 @@ void remoteSendStatus()
         s += 12;
     }
     uint32_t v = armNextPC;
-    sprintf(s, "0f:%02x%02x%02x%02x;", (v & 255),
+    snprintf(s, sizeof(buffer), "0f:%02x%02x%02x%02x;", (v & 255),
         (v >> 8) & 255,
         (v >> 16) & 255,
         (v >> 24) & 255);
     s += 12;
     CPUUpdateCPSR();
     v = reg[16].I;
-    sprintf(s, "19:%02x%02x%02x%02x;", (v & 255),
+    snprintf(s, sizeof(buffer), "19:%02x%02x%02x%02x;", (v & 255),
         (v >> 8) & 255,
         (v >> 16) & 255,
         (v >> 24) & 255);
@@ -3715,7 +3770,7 @@ void remoteMemoryRead(char* p)
     char* s = buffer;
     for (int i = 0; i < count; i++) {
         uint8_t b = debuggerReadByte(address);
-        sprintf(s, "%02x", b);
+        snprintf(s, (count*2), "%02x", b);
         address++;
         s += 2;
     }
@@ -3989,7 +4044,7 @@ void remoteReadRegister(char* p)
     char buffer[1024];
     char* s = buffer;
     uint32_t v = reg[r].I;
-    sprintf(s, "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
+    snprintf(s, sizeof(buffer), "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
         (v >> 16) & 255, (v >> 24) & 255);
     remotePutPacket(buffer);
 }
@@ -4004,29 +4059,29 @@ void remoteReadRegisters(char* p)
     // regular registers
     for (i = 0; i < 15; i++) {
         uint32_t v = reg[i].I;
-        sprintf(s, "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
+        snprintf(s, sizeof(buffer), "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
             (v >> 16) & 255, (v >> 24) & 255);
         s += 8;
     }
     // PC
     uint32_t pc = armNextPC;
-    sprintf(s, "%02x%02x%02x%02x", pc & 255, (pc >> 8) & 255,
+    snprintf(s, sizeof(buffer) - 8, "%02x%02x%02x%02x", pc & 255, (pc >> 8) & 255,
         (pc >> 16) & 255, (pc >> 24) & 255);
     s += 8;
 
     // floating point registers (24-bit)
     for (i = 0; i < 8; i++) {
-        sprintf(s, "000000000000000000000000");
+        snprintf(s, sizeof(buffer) - 16, "000000000000000000000000");
         s += 24;
     }
 
     // FP status register
-    sprintf(s, "00000000");
+    snprintf(s, sizeof(buffer) - 40, "00000000");
     s += 8;
     // CPSR
     CPUUpdateCPSR();
     uint32_t v = reg[16].I;
-    sprintf(s, "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
+    snprintf(s, sizeof(buffer) - 48, "%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
         (v >> 16) & 255, (v >> 24) & 255);
     s += 8;
     *s = 0;
@@ -4302,7 +4357,11 @@ void monprintf(std::string line)
 
     if (output.length() <= 1000) {
         char dbgReply[1000];
+#if __STDC_WANT_SECURE_LIB__
+        strcpy_s(dbgReply, sizeof(dbgReply), output.c_str());
+#else
         strcpy(dbgReply, output.c_str());
+#endif
         remotePutPacket(dbgReply);
     }
 }

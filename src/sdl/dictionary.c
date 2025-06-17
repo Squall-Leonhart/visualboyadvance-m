@@ -19,6 +19,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if __STDC_WANT_SECURE_LIB__
+#define snprintf sprintf_s
+#endif
+
 /** Maximum value size for integers and doubles. */
 #define MAXVALSZ 1024
 
@@ -64,7 +68,11 @@ static char *xstrdup(const char *s)
                 return NULL;
         t = (char *)malloc(strlen(s) + 1);
         if (t) {
+#if __STDC_WANT_SECURE_LIB__
+                strcpy_s(t, strlen(s) + 1, s);
+#else
                 strcpy(t, s);
+#endif
         }
         return t;
 }
@@ -372,12 +380,12 @@ int main(int argc, char *argv[])
         /* Set values in dictionary */
         printf("setting %d values...\n", NVALS);
         for (i = 0; i < NVALS; i++) {
-                sprintf(cval, "%04d", i);
+                snprintf(cval, sizeof(cval), "%04d", i);
                 dictionary_set(d, cval, "salut");
         }
         printf("getting %d values...\n", NVALS);
         for (i = 0; i < NVALS; i++) {
-                sprintf(cval, "%04d", i);
+                snprintf(cval, sizeof(cval), "%04d", i);
                 val = dictionary_get(d, cval, DICT_INVALID_KEY);
                 if (val == DICT_INVALID_KEY) {
                         printf("cannot get value for key [%s]\n", cval);
@@ -385,7 +393,7 @@ int main(int argc, char *argv[])
         }
         printf("unsetting %d values...\n", NVALS);
         for (i = 0; i < NVALS; i++) {
-                sprintf(cval, "%04d", i);
+                snprintf(cval, sizeof(cval), "%04d", i);
                 dictionary_unset(d, cval);
         }
         if (d->n != 0) {

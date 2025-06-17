@@ -8,8 +8,9 @@ include(VbamFunctions)
 set(VBAM_WX_COMMON
     audio/audio.cpp
     audio/audio.h
-    audio/internal/openal.cpp
-    audio/internal/openal.h
+    audio/internal/coreaudio.cpp
+    audio/internal/sdl.cpp
+    audio/internal/sdl.h
     background-input.cpp
     background-input.h
     cmdevents.cpp
@@ -86,7 +87,10 @@ if(NOT ZIP_PROGRAM)
     endif()
 endif()
 
-if(MSVC)
+find_program(XGETTEXT xgettext)
+find_program(MSGINIT  msginit)
+
+if(CMAKE_HOST_WIN32 AND (NOT XGETTEXT OR NOT MSGINIT))
     # Install gettext tools from nuget.
 
     # First fetch the nuget binary.
@@ -113,6 +117,9 @@ if(MSVC)
 
     list(APPEND CMAKE_PROGRAM_PATH ${pkg}/tools/bin)
 endif()
+
+unset(XGETTEXT)
+unset(MSGINIT)
 
 find_package(Gettext REQUIRED)
 find_program(XGETTEXT xgettext)
@@ -156,6 +163,14 @@ if(CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
   find_package(nanosvg)
 endif()
 
+if(APPLE)
+    find_library(COREAUDIO CoreAudio)
+    find_library(COREFOUNDATION CoreFoundation)
+    find_library(AUDIOTOOLBOX AudioToolbox)
+    find_library(METAL Metal)
+    find_library(METALKIT MetalKit)
+endif()
+
 set(ENABLE_OPENGL TRUE)
 find_package(wxWidgets COMPONENTS xrc xml html adv net core base gl ${wx_find_extra})
 
@@ -170,9 +185,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
     string(REGEX REPLACE "/lib$" "/debug/lib" wxWidgets_LIB_DIR "${wxWidgets_LIB_DIR}")
     set(wxWidgets_LIB_DIR "${wxWidgets_LIB_DIR}" CACHE INTERNAL "wxWidgets library directory" FORCE)
 endif()
-
-# Find OpenAL (required).
-find_package(OpenAL REQUIRED)
 
 # Workaround of static liblzma not being found on MSYS2.
 if(VBAM_STATIC AND MSYS)
@@ -201,6 +213,9 @@ function(configure_wx_target target)
     get_target_property(target_type ${target} TYPE)
     if(target_type STREQUAL "EXECUTABLE")
         set(target_is_executable TRUE)
+    elseif(target_type STREQUAL "INTERFACE_LIBRARY")
+        set(target_is_executable FALSE)
+        set(target_is_interface_library TRUE)
     else()
         set(target_is_executable FALSE)
     endif()
@@ -208,6 +223,8 @@ function(configure_wx_target target)
     function(_add_link_libraries)
         if(${target_is_executable})
             target_link_libraries(${target} ${ARGN})
+        elseif(${target_is_interface_library})
+            target_link_libraries(${target} INTERFACE ${ARGN})
         else()
             target_link_libraries(${target} PUBLIC ${ARGN})
         endif()
@@ -238,11 +255,7 @@ function(configure_wx_target target)
     endfunction()
 
     # Core emulator.
-    _add_link_libraries(vbam-core)
-
-    # Nonstd.
-    _add_link_libraries(nonstd-lib)
-    _add_include_directories(${NONSTD_INCLUDE_DIR})
+    _add_link_libraries(vbam-core nonstd-lib ghc-filesystem)
 
     # wxWidgets.
     _add_link_libraries(${wxWidgets_LIBRARIES})
@@ -253,16 +266,39 @@ function(configure_wx_target target)
         _add_compile_definitions(${wxWidgets_DEFINITIONS_DEBUG})
     endif()
 
+    # Generic file dialogs
+    if (ENABLE_GENERIC_FILE_DIALOGS)
+        _add_compile_definitions(USE_GENERIC_FILE_DIALOGS)
+    endif()
+
+    # No Metal
+    if(NOT CMAKE_Metal_COMPILER)
+        _add_compile_definitions(NO_METAL)
+    endif()
+
     # OpenAL.
-    if(OPENAL_STATIC)
-        _add_compile_definitions(AL_LIBTYPE_STATIC)
+    if(ENABLE_OPENAL)
+        if(OPENAL_STATIC)
+            _add_compile_definitions(AL_LIBTYPE_STATIC)
+        endif()
+
+        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+            find_library(FMT_LIBRARY NAMES fmtd fmt)
+        else()
+            find_library(FMT_LIBRARY fmt)
+        endif()
+
+        if(FMT_LIBRARY)
+            list(APPEND OPENAL_LIBRARY ${FMT_LIBRARY})
+        endif()
 
         if(WIN32)
             list(APPEND OPENAL_LIBRARY avrt)
         endif()
+
+        _add_include_directories(${OPENAL_INCLUDE_DIR})
+        _add_link_libraries(${OPENAL_LIBRARY})
     endif()
-    _add_include_directories(${OPENAL_INCLUDE_DIR})
-    _add_link_libraries(${OPENAL_LIBRARY})
 
     # XAudio2.
     if(ENABLE_XAUDIO2)
@@ -293,14 +329,26 @@ function(configure_wx_target target)
         _add_compile_definitions(NO_D3D)
     endif()
 
-    # SDL2.
-    _add_link_libraries(${VBAM_SDL2_LIBS})
+    # SDL.
+    _add_link_libraries(${VBAM_SDL_LIBS})
 
     # OpenGL.
     if(ENABLE_OPENGL)
         _add_link_libraries(${OPENGL_LIBRARIES})
     else()
         _add_compile_definitions(NO_OGL)
+    endif()
+
+    # Metal
+    if(APPLE)
+        _add_link_libraries(${COREFOUNDATION})
+        _add_link_libraries(${COREAUDIO})
+        _add_link_libraries(${AUDIOTOOLBOX})
+
+        if(CMAKE_Metal_COMPILER)
+            _add_link_libraries($<LINK_LIBRARY:WEAK_FRAMEWORK,${METAL}>)
+            _add_link_libraries($<LINK_LIBRARY:WEAK_FRAMEWORK,${METALKIT}>)
+        endif()
     endif()
 
 endfunction()
@@ -319,8 +367,49 @@ add_executable(
     MACOSX_BUNDLE
 )
 
+if(APPLE)
+    if(CMAKE_Metal_COMPILER)
+        set(VBAM_SHADER default.metallib)
+
+        set(ShaderBase_HEADERS
+            AAPLShaderTypes.h
+        )
+
+        set(ShaderBase_SOURCES
+            AAPLShaders.metal
+        )
+
+        add_metal_shader_library(default
+            STANDARD macos-metal1.1
+            ${ShaderBase_SOURCES}
+            ${ShaderBase_HEADERS}
+        )
+
+        target_embed_metal_shader_libraries(visualboyadvance-m
+            default
+        )
+    endif()
+endif()
+
 target_sources(visualboyadvance-m PRIVATE ${VBAM_WX_COMMON} ${VBAM_ICON_PATH})
-target_include_directories(visualboyadvance-m PRIVATE ${SDL2_INCLUDE_DIRS})
+
+if(ENABLE_SDL3)
+    target_include_directories(visualboyadvance-m PRIVATE ${SDL3_INCLUDE_DIRS})
+else()
+    target_include_directories(visualboyadvance-m PRIVATE ${SDL2_INCLUDE_DIRS})
+endif()
+
+if(ENABLE_OPENAL)
+    find_package(OpenAL REQUIRED)
+
+    target_sources(visualboyadvance-m PRIVATE
+        audio/internal/openal.cpp
+        audio/internal/openal.h
+    )
+
+    target_compile_definitions(visualboyadvance-m PRIVATE VBAM_ENABLE_OPENAL)
+endif()
+
 
 target_link_libraries(
     visualboyadvance-m
@@ -520,6 +609,8 @@ if(ENABLE_FFMPEG)
     endif()
 endif()
 
+target_link_libraries(visualboyadvance-m nonstd-lib)
+
 # wxrc does not support xrs files in -c output (> 10x compression)
 # we do it using the bin2c.c utility.
 set(BIN2C ${CMAKE_BINARY_DIR}/bin2c)
@@ -681,7 +772,7 @@ endif()
 
 if(WIN32 AND (X86_64 OR ARM64 OR X86_32) AND ENABLE_ONLINEUPDATES)
     if(NOT DEFINED WINSPARKLE_BIN_RELEASE_DIR)
-        set(WINSPARKLE_BIN_RELEASE_DIR ${CMAKE_SOURCE_DIR}/win32-deps/WinSparkle-0.8.1)
+        set(WINSPARKLE_BIN_RELEASE_DIR ${CMAKE_SOURCE_DIR}/win32-deps/WinSparkle-0.9.1)
     endif()
 
     target_include_directories(
@@ -689,13 +780,45 @@ if(WIN32 AND (X86_64 OR ARM64 OR X86_32) AND ENABLE_ONLINEUPDATES)
         PRIVATE ${WINSPARKLE_BIN_RELEASE_DIR}/include
     )
 
-    if(X86_64)
+    target_sources(visualboyadvance-m
+        PRIVATE
+        autoupdater/wxmsw/autoupdater.cpp
+        autoupdater/wxmsw/winsparkle-rc.h
+        autoupdater/wxmsw/winsparkle-wrapper.cpp
+        autoupdater/wxmsw/winsparkle-wrapper.h
+    )
+
+    if (MINGW)
+        find_library(CRYPTO crypto)
+    else()
+        find_library(CRYPTO libcrypto)
+    endif()
+
+    find_library(ED25519 ed25519)
+    if(CMAKE_BUILD_TYPE STREQUAL Debug)
+        find_library(WEBVIEW NAMES wxmsw33ud_webview wxmsw33u_webview)
+    else()
+        find_library(WEBVIEW wxmsw33u_webview)
+    endif()
+
+    if (X86_64 AND MINGW)
+        TARGET_LINK_LIBRARIES(visualboyadvance-m ${WINSPARKLE_BIN_RELEASE_DIR}/mingw/x86_64/libwinsparkle.a ${CRYPTO} ${WEBVIEW} ${E25519})
+        set(WINSPARKLE_DLL ${WINSPARKLE_BIN_RELEASE_DIR}/mingw/x86_64/WinSparkle.dll)
+    elseif (X86_32 AND MINGW)
+        TARGET_LINK_LIBRARIES(visualboyadvance-m ${WINSPARKLE_BIN_RELEASE_DIR}/mingw/i686/libwinsparkle.a ${CRYPTO} ${WEBVIEW} ${E25519})
+        set(WINSPARKLE_DLL ${WINSPARKLE_BIN_RELEASE_DIR}/mingw/i686/WinSparkle.dll)
+    elseif(X86_64)
+        TARGET_LINK_LIBRARIES(visualboyadvance-m ${WINSPARKLE_BIN_RELEASE_DIR}/x64/Release/WinSparkle.lib ${CRYPTO} ${WEBVIEW} ${E25519})
         set(WINSPARKLE_DLL ${WINSPARKLE_BIN_RELEASE_DIR}/x64/Release/WinSparkle.dll)
     elseif(ARM64)
+        TARGET_LINK_LIBRARIES(visualboyadvance-m ${WINSPARKLE_BIN_RELEASE_DIR}/ARM64/Release/WinSparkle.lib ${CRYPTO} ${WEBVIEW})
         set(WINSPARKLE_DLL ${WINSPARKLE_BIN_RELEASE_DIR}/ARM64/Release/WinSparkle.dll)
     elseif(X86_32)
+        TARGET_LINK_LIBRARIES(visualboyadvance-m ${WINSPARKLE_BIN_RELEASE_DIR}/Release/WinSparkle.lib ${CRYPTO} ${WEBVIEW})
         set(WINSPARKLE_DLL ${WINSPARKLE_BIN_RELEASE_DIR}/Release/WinSparkle.dll)
     endif()
+
+    TARGET_LINK_LIBRARIES(visualboyadvance-m ${CRYPTO} ${WEBVIEW} ${ED25519})
 
     configure_file(autoupdater/wxmsw/winsparkle-path.h.in ${CMAKE_BINARY_DIR}/winsparkle-path.h)
 endif()
@@ -930,6 +1053,10 @@ if(APPLE)
 endif()
 
 if(APPLE AND UPSTREAM_RELEASE)
+    if(WX_MAC_PATCHED)
+        target_compile_definitions(visualboyadvance-m PRIVATE VBAM_WX_MAC_PATCHED_FOR_ALERT_SOUND)
+    endif()
+
     if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
         find_program(STRIP_PROGRAM strip)
 

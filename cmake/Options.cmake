@@ -9,14 +9,10 @@ else()
 endif()
 
 set(ENABLE_SDL_DEFAULT ${BUILD_DEFAULT})
+
 if(WIN32 OR APPLE)
     set(ENABLE_SDL_DEFAULT OFF)
 endif()
-
-option(ENABLE_SDL "Build the SDL port" ${ENABLE_SDL_DEFAULT})
-option(ENABLE_WX "Build the wxWidgets port" ${BUILD_DEFAULT})
-option(ENABLE_DEBUGGER "Enable the debugger" ON)
-option(ENABLE_ASAN "Enable -fsanitize=address by default. Requires debug build with GCC/Clang" OFF)
 
 # Static linking
 set(VBAM_STATIC_DEFAULT OFF)
@@ -30,6 +26,8 @@ option(VBAM_STATIC "Try to link all libraries statically" ${VBAM_STATIC_DEFAULT}
 
 if(VBAM_STATIC)
     set(SDL2_STATIC ON)
+    set(SDL3_STATIC ON)
+    set(SFML_STATIC_LIBRARIES ON)
     set(FFMPEG_STATIC ON)
     set(OPENAL_STATIC ON)
     set_property(GLOBAL PROPERTY LINK_SEARCH_START_STATIC ON)
@@ -40,6 +38,33 @@ if(VBAM_STATIC)
     else()
         list(INSERT CMAKE_FIND_LIBRARY_SUFFIXES 0 .a)
     endif()
+endif()
+
+find_package(SDL3 QUIET)
+
+option(ENABLE_SDL3 "Use SDL3" "${SDL3_FOUND}")
+
+if(ENABLE_SDL3)
+    find_package(SDL3 CONFIG REQUIRED)
+else()
+    find_package(SDL2 CONFIG REQUIRED)
+endif()
+
+option(ENABLE_GENERIC_FILE_DIALOGS "Use generic file dialogs" OFF)
+option(DISABLE_OPENGL "Disable OpenGL" OFF)
+option(ENABLE_SDL "Build the SDL port" ${ENABLE_SDL_DEFAULT})
+option(ENABLE_WX "Build the wxWidgets port" ${BUILD_DEFAULT})
+option(ENABLE_DEBUGGER "Enable the debugger" ON)
+option(ENABLE_ASAN "Enable -fsanitize=address by default. Requires debug build with GCC/Clang" OFF)
+
+if(ENABLE_SDL3)
+   set(CMAKE_C_FLAGS "-DENABLE_SDL3 ${CMAKE_C_FLAGS}")
+   set(CMAKE_CXX_FLAGS "-DENABLE_SDL3 ${CMAKE_CXX_FLAGS}")
+endif()
+
+if(DISABLE_OPENGL)
+   set(CMAKE_C_FLAGS "-DNO_OPENGL -DNO_OGL ${CMAKE_C_FLAGS}")
+   set(CMAKE_CXX_FLAGS "-DNO_OPENGL -DNO_OGL ${CMAKE_CXX_FLAGS}")
 endif()
 
 option(ENABLE_ASM "Enable x86 ASM related options" OFF)
@@ -125,13 +150,24 @@ if(WIN32)
     option(ENABLE_DIRECT3D "Enable Direct3D rendering for the wxWidgets port" OFF)
 
     set(XAUDIO2_DEFAULT ON)
-    if (MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL Clang)
+    if ((MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL Clang) OR (MINGW AND X86))
         # TODO: We should update the XAudio headers to build with clang-cl. See
         # https://github.com/visualboyadvance-m/visualboyadvance-m/issues/1021
         set(XAUDIO2_DEFAULT OFF)
     endif()
     option(ENABLE_XAUDIO2 "Enable xaudio2 sound output for the wxWidgets port" ${XAUDIO2_DEFAULT})
 endif()
+
+find_package(OpenAL QUIET)
+
+set(OPENAL_DEFAULT ${OpenAL_FOUND})
+
+if(MINGW AND X86)
+    # OpenAL-Soft uses avrt.dll which is not available on Windows XP.
+    set(OPENAL_DEFAULT OFF)
+endif()
+
+option(ENABLE_OPENAL "Enable OpenAL-Soft sound output for the wxWidgets port" ${OPENAL_DEFAULT})
 
 set(ENABLE_FAUDIO_DEFAULT OFF)
 
@@ -155,3 +191,13 @@ if(TRANSLATIONS_ONLY AND (ENABLE_SDL OR ENABLE_WX))
 endif()
 
 option(GPG_SIGNATURES "Create GPG signatures for release files" OFF)
+
+if(APPLE)
+   set(wx_mac_patched_default OFF)
+
+   if(UPSTREAM_RELEASE)
+      set(wx_mac_patched_default ON)
+   endif()
+
+   option(WX_MAC_PATCHED "A build of wxWidgets that is patched for the alert sound bug is being used" ${wx_mac_patched_default})
+endif()

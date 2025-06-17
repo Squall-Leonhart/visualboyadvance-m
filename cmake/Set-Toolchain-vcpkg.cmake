@@ -279,7 +279,7 @@ function(get_binary_packages vcpkg_exe)
 
     FetchContent_GetProperties(vcpkg_binpkg)
     if(NOT vcpkg_binpkg_POPULATED)
-        FetchContent_Populate(vcpkg_binpkg)
+        FetchContent_MakeAvailable(vcpkg_binpkg)
     endif()
 
     unset(to_install)
@@ -474,6 +474,10 @@ function(vcpkg_set_toolchain)
 
     foreach(pkg ${VCPKG_DEPS})
         list(APPEND VCPKG_DEPS_QUALIFIED ${pkg}:${VCPKG_TARGET_TRIPLET})
+
+        if(VCPKG_TARGET_TRIPLET STREQUAL "x86-mingw-static")
+            list(APPEND VCPKG_DEPS_QUALIFIED libsamplerate:x86-mingw-static)
+        endif()
     endforeach()
 
     if(WIN32)

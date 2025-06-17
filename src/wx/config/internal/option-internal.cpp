@@ -72,10 +72,14 @@ static const std::array<wxString, kNbInterframes> kInterframeStrings = {
 static const std::array<wxString, kNbRenderMethods> kRenderMethodStrings = {
     "simple",
     "opengl",
+    "sdl_video",
 #if defined(__WXMSW__) && !defined(NO_D3D)
     "direct3d",
 #elif defined(__WXMAC__)
     "quartz2d",
+#ifndef NO_METAL
+    "metal",
+#endif
 #endif
 };
 
@@ -83,7 +87,10 @@ static const std::array<wxString, kNbRenderMethods> kRenderMethodStrings = {
 // Adding an option without adding to this array will result in a compiler
 // error since kNbAudioApis is automatically updated.
 static const std::array<wxString, kNbAudioApis> kAudioApiStrings = {
+#if defined(VBAM_ENABLE_OPENAL)
     "openal",
+#endif
+    "sdl_audio",
 #if defined(__WXMSW__)
     "directsound",
 #endif
@@ -92,6 +99,9 @@ static const std::array<wxString, kNbAudioApis> kAudioApiStrings = {
 #endif
 #if defined(VBAM_ENABLE_FAUDIO)
     "faudio",
+#endif
+#if defined(__WXMAC__)
+    "coreaudio",
 #endif
 };
 
@@ -137,10 +147,16 @@ std::array<Option, kNbOptions>& Option::All() {
         Interframe interframe = Interframe::kNone;
         bool keep_on_top = false;
         int32_t max_threads = 0;
+
+#if defined(__WXMAC__) && !defined(NO_METAL)
+        RenderMethod render_method = RenderMethod::kMetal;
+#else
 #if defined(NO_OGL)
-        RenderMethod render_method = RenderMethod::kSimple;
+        //RenderMethod render_method = RenderMethod::kSimple;
+        RenderMethod render_method = RenderMethod::kSDL;
 #else
         RenderMethod render_method = RenderMethod::kOpenGL;
+#endif
 #endif
         double video_scale = 3;
         bool retain_aspect = true;
@@ -209,10 +225,16 @@ std::array<Option, kNbOptions>& Option::All() {
         bool allow_joystick_background_input = true;
 
         /// Sound
-#if defined(VBAM_ENABLE_XAUDIO2)
+#if defined(__WXMAC__)
+        AudioApi audio_api = AudioApi::kCoreAudio;
+#elif defined(VBAM_ENABLE_FAUDIO)
+        AudioApi audio_api = AudioApi::kFAudio;
+#elif defined(VBAM_ENABLE_XAUDIO2)
         AudioApi audio_api = AudioApi::kXAudio2;
-#else
+#elif defined(VBAM_ENABLE_OPENAL)
         AudioApi audio_api = AudioApi::kOpenAL;
+#else
+        AudioApi audio_api = AudioApi::kSDL;
 #endif
         wxString audio_dev;
         // 10 fixes stuttering on mac with openal, as opposed to 5
@@ -228,6 +250,8 @@ std::array<Option, kNbOptions>& Option::All() {
         bool dsound_hw_accel = false;
         bool upmix = false;
         int32_t volume = 100;
+        uint32_t bitdepth = 3;
+        wxString sdlrenderer = wxString("default");
     };
     static OwnedOptions g_owned_opts;
 
@@ -243,11 +267,13 @@ std::array<Option, kNbOptions>& Option::All() {
         Option(OptionID::kDispFilter, &g_owned_opts.filter),
         Option(OptionID::kDispFilterPlugin, &g_owned_opts.filter_plugin),
         Option(OptionID::kDispIFB, &g_owned_opts.interframe),
+        Option(OptionID::kBitDepth, &g_owned_opts.bitdepth, 0, 3),
         Option(OptionID::kDispKeepOnTop, &g_owned_opts.keep_on_top),
         Option(OptionID::kDispMaxThreads, &g_owned_opts.max_threads, 0, 256),
         Option(OptionID::kDispRenderMethod, &g_owned_opts.render_method),
         Option(OptionID::kDispScale, &g_owned_opts.video_scale, 1, 6),
         Option(OptionID::kDispStretch, &g_owned_opts.retain_aspect),
+        Option(OptionID::kSDLRenderer, &g_owned_opts.sdlrenderer),
 
         /// GB
         Option(OptionID::kGBBiosFile, &g_owned_opts.gb_bios),
@@ -383,6 +409,7 @@ const std::array<OptionData, kNbOptions + 1> kAllOptionsData = {
     OptionData{"Display/Filter", "", _("Full-screen filter to apply")},
     OptionData{"Display/FilterPlugin", "", _("Filter plugin library")},
     OptionData{"Display/IFB", "", _("Interframe blending function")},
+    OptionData{"Display/BitDepth", "BitDepth", _("Bit depth")},
     OptionData{"Display/KeepOnTop", "KeepOnTop", _("Keep window on top")},
     OptionData{"Display/MaxThreads", "Multithread",
                _("Maximum number of threads to run filters in")},
@@ -390,6 +417,7 @@ const std::array<OptionData, kNbOptions + 1> kAllOptionsData = {
                _("Render method; if unsupported, simple method will be used")},
     OptionData{"Display/Scale", "", _("Default scale factor")},
     OptionData{"Display/Stretch", "RetainAspect", _("Retain aspect ratio when resizing")},
+    OptionData{"Display/SDLRenderer", "", _("SDL renderer")},
 
     /// GB
     OptionData{"GB/BiosFile", "", _("BIOS file to use for Game Boy, if enabled")},

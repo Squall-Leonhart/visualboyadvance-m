@@ -22,7 +22,7 @@ if(TAG_RELEASE)
     include(MakeReleaseCommitAndTag)
 endif()
 
-set(VCPKG_DEPS pkgconf zlib pthreads "sdl2[samplerate]" gettext wxwidgets)
+set(VCPKG_DEPS pkgconf zlib pthreads sdl3 gettext wxwidgets)
 
 set(VCPKG_DEPS_OPTIONAL
     ffmpeg ENABLE_FFMPEG
@@ -74,6 +74,16 @@ set(CMAKE_C_STANDARD_REQUIRED True)
 
 project(VBA-M C CXX)
 
+if(APPLE)
+    include(CheckLanguage)
+    include(MetalShaderSupport)
+
+    check_language(Metal)
+    if(CMAKE_Metal_COMPILER)
+        enable_language(Metal)
+    endif()
+endif()
+
 include(CTest)
 include(FetchContent)
 include(GNUInstallDirs)
@@ -81,6 +91,11 @@ include(Architecture)
 include(Options)
 include(Toolchain)
 include(Dependencies)
+
+# We target Windows XP for 32 bit Windows builds.
+if(WIN32 AND X86)
+    add_compile_definitions(-DWINVER=0x0501 -D_WIN32_WINNT=0x0501)
+endif()
 
 # Disable tests when not in a git checkout.
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.git")
@@ -184,6 +199,16 @@ set(LOCALEDIR ${CMAKE_INSTALL_PREFIX}/share/locale)
 if(NOT TRANSLATIONS_ONLY)
     add_subdirectory(third_party/include/nonstd)
     add_subdirectory(third_party/include/stb)
+    add_subdirectory(third_party/include/ghc)
+
+    if(ENABLE_LINK)
+        include_directories(third_party/sfml/include)
+        add_subdirectory(third_party/sfml/src/SFML/System  EXCLUDE_FROM_ALL)
+        add_subdirectory(third_party/sfml/src/SFML/Network EXCLUDE_FROM_ALL)
+        set(SFML_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/third_party/sfml/include)
+        set(SFML_LIBRARIES sfml-system sfml-network)
+    endif()
+
     add_subdirectory(src/core)
     add_subdirectory(src/components)
     add_subdirectory(src/sdl)

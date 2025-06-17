@@ -66,7 +66,7 @@ endif
 ifneq (,$(findstring unix,$(platform)))
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
-	SHARED := -shared -Wl,-no-undefined
+	SHARED := -shared -Wl,--version-script=$(LIBRETRO_DIR)/link.T -Wl,--no-undefined
 	TILED_RENDERING=1
 
 # Classic Platforms ####################
@@ -78,8 +78,8 @@ ifneq (,$(findstring unix,$(platform)))
 else ifeq ($(platform), classic_armv7_a7)
 	TARGET := $(TARGET_NAME)_libretro.so
 	fpic := -fPIC
-	SHARED := -shared -Wl,--no-undefined -fPIC
-	CFLAGS += -O3 -ffast-math \
+	SHARED := -shared -Wl,--version-script=$(LIBRETRO_DIR)/link.T -Wl,--no-undefined -fPIC
+	CFLAGS += -Ofast \
 	-flto=4 -fwhole-program -fuse-linker-plugin \
 	-fdata-sections -ffunction-sections -Wl,--gc-sections \
 	-fno-stack-protector -fno-ident -fomit-frame-pointer \
@@ -112,7 +112,7 @@ else ifeq ($(platform), classic_armv8_a35)
 	fpic := -fPIC
 	SHARED := -shared
 	TILED_RENDERING=1
-	CFLAGS += -O3 -ffast-math \
+	CFLAGS += -Ofast \
 	-flto=4 -fwhole-program -fuse-linker-plugin \
 	-fdata-sections -ffunction-sections -Wl,--gc-sections \
 	-fno-stack-protector -fno-ident -fomit-frame-pointer \
@@ -188,6 +188,8 @@ else ifneq (,$(findstring ios,$(platform)))
 	  MINVERSION = -miphoneos-version-min=5.0
 	endif
         CFLAGS += $(MINVERSION)
+        CXXFLAGS += $(MINVERSION)
+        LDFLAGS += $(MINVERSION)
 	TILED_RENDERING=1
 
 else ifeq ($(platform), tvos-arm64)
@@ -200,6 +202,10 @@ endif
    TILED_RENDERING = 1
    CC = cc -arch arm64 -isysroot $(IOSSDK)
    CXX = c++ -arch arm64 -isysroot $(IOSSDK)
+   MINVERSION = -mappletvos-version-min=11.0
+   CFLAGS += $(MINVERSION)
+   CXXFLAGS += $(MINVERSION)
+   LDFLAGS += $(MINVERSION)
 
 # Theos iOS
 else ifeq ($(platform), theos_ios)
@@ -311,8 +317,8 @@ else ifeq ($(platform), wiiu)
 	CXX = $(DEVKITPPC)/bin/powerpc-eabi-g++$(EXE_EXT)
 	AR = $(DEVKITPPC)/bin/powerpc-eabi-ar$(EXE_EXT)
 	ENDIANNESS_DEFINES += -DMSB_FIRST -DWORDS_BIGENDIAN=1
-	PLATFORM_DEFINES += -DGEKKO -DWIIU -DHW_WUP -mcpu=750 -meabi -mhard-float -D__ppc__
-	PLATFORM_DEFINES += -U__INT32_TYPE__ -U __UINT32_TYPE__ -D__INT32_TYPE__=int
+	PLATFORM_DEFINES += -DGEKKO -DWIIU -DHW_RVL -mcpu=750 -meabi -mhard-float -D__ppc__
+	PLATFORM_DEFINES += -ffunction-sections -fdata-sections -D__wiiu__ -D__wut__
 	STATIC_LINKING=1
 	TILED_RENDERING=1
 
@@ -322,24 +328,23 @@ else ifeq ($(platform), libnx)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
 	DEFINES := -DSWITCH=1 -U__linux__ -U__linux -DRARCH_INTERNAL -DHAVE_THREADS=1
 	CFLAGS := $(DEFINES) -g -O3 \
-		-fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
+		      -fPIE -I$(LIBNX)/include/ -ffunction-sections -fdata-sections -ftls-model=local-exec -Wl,--allow-multiple-definition -specs=$(LIBNX)/switch.specs
 	CFLAGS += $(INCDIRS)
 	CFLAGS += $(INCLUDE) -D__SWITCH__ -DHAVE_LIBNX
-	CXXFLAGS := $(ASFLAGS) $(CFLAGS) -fno-rtti -fno-exceptions
+	CXXFLAGS := $(ASFLAGS) $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
+	CFLAGS += -std=gnu11
 	STATIC_LINKING=1
 
-# Nintendo Switch (devkitpro)
+# Nintendo Switch (libtransistor)
 else ifeq ($(platform), switch)
 	TARGET := $(TARGET_NAME)_libretro_$(platform).a
-	CC = $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-gcc$(EXE_EXT)
-	CXX = $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-g++$(EXE_EXT)
-	AR = $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-ar$(EXE_EXT)
+	include $(LIBTRANSISTOR_HOME)/libtransistor.mk
 	STATIC_LINKING=1
 	TILED_RENDERING=1
 
 else ifneq (,$(findstring armv,$(platform)))
 	TARGET := $(TARGET_NAME)_libretro.so
-	SHARED := -shared -Wl,--no-undefined
+	SHARED := -shared -Wl,--version-script=$(LIBRETRO_DIR)/link.T -Wl,--no-undefined
 	TILED_RENDERING=1
 	fpic := -fPIC
 	ifneq (,$(findstring cortexa8,$(platform)))
@@ -523,6 +528,99 @@ else ifneq (,$(findstring windows_msvc2017,$(platform)))
 	PSS_STYLE :=2
 	LDFLAGS += -DLL
 
+else ifneq (,$(findstring windows_msvc2022,$(platform)))
+
+	PlatformSuffix = $(subst windows_msvc2022_,,$(platform))
+	ifneq (,$(findstring desktop,$(PlatformSuffix)))
+		WinPartition = desktop
+		MSVC2022CompileFlags = -DWINAPI_FAMILY=WINAPI_FAMILY_DESKTOP_APP -FS
+		LDFLAGS += -LIBPATH:"$(LIB)" -MANIFEST -LTCG:incremental -NXCOMPAT -DYNAMICBASE -DEBUG -OPT:REF -INCREMENTAL:NO -SUBSYSTEM:WINDOWS -MANIFESTUAC:"level='asInvoker' uiAccess='false'" -OPT:ICF -ERRORREPORT:PROMPT -NOLOGO -TLBID:1
+		LIBS := kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib
+	else ifneq (,$(findstring uwp,$(PlatformSuffix)))
+		WinPartition = uwp
+		MSVC2022CompileFlags = -DWINAPI_FAMILY=WINAPI_FAMILY_APP -D_WINDLL -D_UNICODE -DUNICODE -D__WRL_NO_DEFAULT_LIB__ -EHsc -FS
+		LDFLAGS += -LIBPATH:"$(LIB)" -APPCONTAINER -NXCOMPAT -DYNAMICBASE -MANIFEST:NO -LTCG -OPT:REF -SUBSYSTEM:CONSOLE -MANIFESTUAC:NO -OPT:ICF -ERRORREPORT:PROMPT -NOLOGO -TLBID:1 -DEBUG:FULL -WINMD:NO
+		LIBS := WindowsApp.lib
+	endif
+
+	CFLAGS += $(MSVC2022CompileFlags)
+	CXXFLAGS += $(MSVC2022CompileFlags)
+
+	TargetArchMoniker = $(subst $(WinPartition)_,,$(PlatformSuffix))
+
+	CC  = cl.exe
+	CXX = cl.exe
+	LD = link.exe
+
+	reg_query = $(call filter_out2,$(subst $2,,$(shell reg query "$2" -v "$1" 2>nul)))
+	fix_path = $(subst $(SPACE),\ ,$(subst \,/,$1))
+
+	ProgramFilesw := $(shell cmd //c "echo %PROGRAMFILES%")
+	ProgramFiles := $(shell cygpath "$(ProgramFilesw)")
+
+	WindowsSdkDir ?= $(call reg_query,InstallationFolder,HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v10.0)
+	WindowsSdkDir ?= $(call reg_query,InstallationFolder,HKEY_CURRENT_USER\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v10.0)
+	WindowsSdkDir ?= $(call reg_query,InstallationFolder,HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v10.0)
+	WindowsSdkDir ?= $(call reg_query,InstallationFolder,HKEY_CURRENT_USER\SOFTWARE\Microsoft\Microsoft SDKs\Windows\v10.0)
+	WindowsSdkDir := $(WindowsSdkDir)
+
+	WindowsSDKVersion ?= $(firstword $(foreach folder,$(subst $(subst \,/,$(WindowsSdkDir)Include/),,$(wildcard $(call fix_path,$(WindowsSdkDir)Include\*))),$(if $(wildcard $(call fix_path,$(WindowsSdkDir)Include/$(folder)/um/Windows.h)),$(folder),)))$(BACKSLASH)
+	WindowsSDKVersion := $(WindowsSDKVersion)
+
+	VsInstallBuildTools = $(ProgramFiles)/Microsoft Visual Studio/2022/BuildTools
+	VsInstallEnterprise = $(ProgramFiles)/Microsoft Visual Studio/2022/Enterprise
+	VsInstallProfessional = $(ProgramFiles)/Microsoft Visual Studio/2022/Professional
+	VsInstallCommunity = $(ProgramFiles)/Microsoft Visual Studio/2022/Community
+
+	VsInstallRoot ?= $(shell if [ -d "$(VsInstallBuildTools)" ]; then echo "$(VsInstallBuildTools)"; fi)
+	ifeq ($(VsInstallRoot), )
+		VsInstallRoot = $(shell if [ -d "$(VsInstallEnterprise)" ]; then echo "$(VsInstallEnterprise)"; fi)
+	endif
+	ifeq ($(VsInstallRoot), )
+		VsInstallRoot = $(shell if [ -d "$(VsInstallProfessional)" ]; then echo "$(VsInstallProfessional)"; fi)
+	endif
+	ifeq ($(VsInstallRoot), )
+		VsInstallRoot = $(shell if [ -d "$(VsInstallCommunity)" ]; then echo "$(VsInstallCommunity)"; fi)
+	endif
+	VsInstallRoot := $(VsInstallRoot)
+
+	VcCompilerToolsVer := $(shell cat "$(VsInstallRoot)/VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt" | grep -o '[0-9\.]*')
+	VcCompilerToolsDir := $(VsInstallRoot)/VC/Tools/MSVC/$(VcCompilerToolsVer)
+
+	WindowsSDKSharedIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\$(WindowsSDKVersion)\shared")
+	WindowsSDKUCRTIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\$(WindowsSDKVersion)\ucrt")
+	WindowsSDKUMIncludeDir := $(shell cygpath -w "$(WindowsSdkDir)\Include\$(WindowsSDKVersion)\um")
+	WindowsSDKUCRTLibDir := $(shell cygpath -w "$(WindowsSdkDir)\Lib\$(WindowsSDKVersion)\ucrt\$(TargetArchMoniker)")
+	WindowsSDKUMLibDir := $(shell cygpath -w "$(WindowsSdkDir)\Lib\$(WindowsSDKVersion)\um\$(TargetArchMoniker)")
+
+	# For some reason the HostX86 compiler doesn't like compiling for x64
+	# ("no such file" opening a shared library), and vice-versa.
+	# Work around it for now by using the strictly x86 compiler for x86, and x64 for x64.
+	# NOTE: What about ARM?
+	ifneq (,$(findstring x64,$(TargetArchMoniker)))
+		VCCompilerToolsBinDir := $(VcCompilerToolsDir)\bin\HostX64
+	else
+		ifneq (,$(findstring arm64,$(TargetArchMoniker)))
+			VCCompilerToolsBinDir := $(VcCompilerToolsDir)\bin\HostARM64
+		else
+			VCCompilerToolsBinDir := $(VcCompilerToolsDir)\bin\HostX86
+		endif
+	endif
+
+	PATH := $(shell IFS=$$'\n'; cygpath "$(VCCompilerToolsBinDir)/$(TargetArchMoniker)"):$(PATH)
+	PATH := $(PATH):$(shell IFS=$$'\n'; cygpath "$(VsInstallRoot)/Common7/IDE")
+	INCLUDE := $(shell IFS=$$'\n'; cygpath -w "$(VcCompilerToolsDir)/include")
+	LIB := $(shell IFS=$$'\n'; cygpath -w "$(VcCompilerToolsDir)/lib/$(TargetArchMoniker)")
+	ifneq (,$(findstring uwp,$(PlatformSuffix)))
+		LIB := $(shell IFS=$$'\n'; cygpath -w "$(LIB)/store")
+	endif
+
+	export INCLUDE := $(INCLUDE);$(WindowsSDKSharedIncludeDir);$(WindowsSDKUCRTIncludeDir);$(WindowsSDKUMIncludeDir)
+	export LIB := $(LIB);$(WindowsSDKUCRTLibDir);$(WindowsSDKUMLibDir)
+	TARGET := $(TARGET_NAME)_libretro.dll
+	PSS_STYLE :=2
+	LDFLAGS += -DLL
+
 # Windows
 else
 	TARGET := $(TARGET_NAME)_libretro.dll
@@ -534,7 +632,11 @@ endif
 
 include Makefile.common
 
+ifneq (,$(findstring msvc,$(platform)))
+OBJS := $(SOURCES_CXX:.cpp=.obj)
+else
 OBJS := $(SOURCES_CXX:.cpp=.o)
+endif
 
 ifeq ($(STATIC_LINKING),1)
 SHARED=
@@ -579,22 +681,30 @@ else
 	LD = link.exe
 
 	ifeq ($(DEBUG), 1)
-		CFLAGS += -MDd
-		CXXFLAGS += -MDd
+		CFLAGS += -MTd
+		CXXFLAGS += -MTd
 	else
-		CFLAGS += -MD
-		CXXFLAGS += -MD
+		CFLAGS += -MT
+		CXXFLAGS += -MT
 	endif
 endif
 else
 	LD = $(CXX)
 endif
 
+ifneq (,$(findstring msvc,$(platform)))
+%.obj: %.cpp
+	$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
+
+%.obj: %.c
+	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
+else
 %.o: %.cpp
 	$(CXX) -c $(OBJOUT)$@ $< $(CXXFLAGS) $(INCFLAGS)
 
 %.o: %.c
 	$(CC) -c $(OBJOUT)$@ $< $(CFLAGS) $(INCFLAGS)
+endif
 
 ifeq ($(platform), theos_ios)
 COMMON_FLAGS := -DIOS $(COMMON_DEFINES) $(INCFLAGS) -I$(THEOS_INCLUDE_PATH) -Wno-error

@@ -36,6 +36,9 @@
 
 #include <cstring>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace sf
 {
@@ -44,31 +47,110 @@ const IpAddress IpAddress::Any(0, 0, 0, 0);
 const IpAddress IpAddress::LocalHost(127, 0, 0, 1);
 const IpAddress IpAddress::Broadcast(255, 255, 255, 255);
 
+// Define inet_pton() and inet_ntop() for Windows XP
+//
+// This is from:
+// https://stackoverflow.com/a/20816961/262458
+//
+#if defined(_WIN32) && _WIN32_WINNT <= _WIN32_WINNT_WINXP
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+static int inet_pton(int af, const char *src, void *dst)
+{
+    struct sockaddr_storage ss;
+    int size = sizeof(ss);
+    char src_copy[INET6_ADDRSTRLEN+1] = { 0 };
+    wchar_t src_copy_w[INET6_ADDRSTRLEN+1] = { 0 };
+#if __STDC_WANT_SECURE_LIB__
+    size_t src_copy_w_size = 0;
+#endif
+
+    ZeroMemory(&ss, sizeof(ss));
+    /* stupid non-const API */
+    strncpy (src_copy, src, INET6_ADDRSTRLEN);
+    src_copy[INET6_ADDRSTRLEN] = 0;
+
+#if __STDC_WANT_SECURE_LIB__
+    mbstowcs_s(&src_copy_w_size, src_copy_w, INET6_ADDRSTRLEN * sizeof(wchar_t), src_copy, INET6_ADDRSTRLEN);
+#else
+    mbstowcs(src_copy_w, src_copy, INET6_ADDRSTRLEN);
+#endif
+
+    if (WSAStringToAddressW(src_copy_w, af, NULL, (struct sockaddr *)&ss, &size) == 0) {
+        switch(af) {
+            case AF_INET:
+                *(struct in_addr *)dst = ((struct sockaddr_in *)&ss)->sin_addr;
+                return 1;
+            case AF_INET6:
+                *(struct in6_addr *)dst = ((struct sockaddr_in6 *)&ss)->sin6_addr;
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
+{
+    struct sockaddr_storage ss;
+    unsigned long s = size;
+    wchar_t dst_w[INET6_ADDRSTRLEN+1] = { 0 };
+#if __STDC_WANT_SECURE_LIB__
+    size_t src_copy_size = 0;
+#endif
+
+    ZeroMemory(&ss, sizeof(ss));
+    ss.ss_family = af;
+
+    switch(af) {
+        case AF_INET:
+            ((struct sockaddr_in *)&ss)->sin_addr = *(struct in_addr *)src;
+            break;
+        case AF_INET6:
+            ((struct sockaddr_in6 *)&ss)->sin6_addr = *(struct in6_addr *)src;
+            break;
+        default:
+            return NULL;
+    }
+
+    /* cannot direclty use &size because of strict aliasing rules */
+    if (WSAAddressToStringW((struct sockaddr *)&ss, sizeof(ss), NULL, dst_w, &s) != 0)
+        return NULL;
+
+#if __STDC_WANT_SECURE_LIB__
+    wcstombs_s(&src_copy_size, dst, INET6_ADDRSTRLEN, dst_w, INET6_ADDRSTRLEN);
+#else
+    wcstombs(dst, dst_w, INET6_ADDRSTRLEN);
+#endif
+
+    return dst;
+}
+#endif // defined(_WIN32) && _WIN32_WINNT <= _WIN32_WINNT_WINXP 
 
 ////////////////////////////////////////////////////////////
-std::optional<IpAddress> IpAddress::resolve(std::string_view address)
+nonstd::optional<IpAddress> IpAddress::resolve(std::string address)
 {
-    using namespace std::string_view_literals;
-
     if (address.empty())
     {
         // Not generating en error message here as resolution failure is a valid outcome.
-        return std::nullopt;
+        return nonstd::nullopt;
     }
 
-    if (address == "255.255.255.255"sv)
+    if (address == "255.255.255.255")
     {
         // The broadcast address needs to be handled explicitly,
         // because it is also the value returned by inet_addr on error
         return Broadcast;
     }
 
-    if (address == "0.0.0.0"sv)
+    if (address == "0.0.0.0")
         return Any;
 
     // Try to convert the address as a byte representation ("xxx.xxx.xxx.xxx")
-    if (const std::uint32_t ip = inet_addr(address.data()); ip != INADDR_NONE)
-        return IpAddress(ntohl(ip));
+    std::uint32_t ipaddr = 0;
+    inet_pton(AF_INET, address.data(), &ipaddr);
+    if (ipaddr != INADDR_NONE)
+        return IpAddress(ntohl(ipaddr));
 
     // Not a valid address, try to convert it as a host name
     addrinfo hints{}; // Zero-initialize
@@ -87,7 +169,7 @@ std::optional<IpAddress> IpAddress::resolve(std::string_view address)
     }
 
     // Not generating en error message here as resolution failure is a valid outcome.
-    return std::nullopt;
+    return nonstd::nullopt;
 }
 
 
@@ -107,10 +189,11 @@ IpAddress::IpAddress(std::uint32_t address) : m_address(address)
 ////////////////////////////////////////////////////////////
 std::string IpAddress::toString() const
 {
+    char address_str[INET_ADDRSTRLEN];
     in_addr address{};
     address.s_addr = htonl(m_address);
-
-    return inet_ntoa(address);
+    inet_ntop(AF_INET, &address, address_str, INET_ADDRSTRLEN);
+    return address_str;
 }
 
 
@@ -122,7 +205,7 @@ std::uint32_t IpAddress::toInteger() const
 
 
 ////////////////////////////////////////////////////////////
-std::optional<IpAddress> IpAddress::getLocalAddress()
+nonstd::optional<IpAddress> IpAddress::getLocalAddress()
 {
     // The method here is to connect a UDP socket to a public ip,
     // and get the local socket address with the getsockname function.
@@ -130,36 +213,36 @@ std::optional<IpAddress> IpAddress::getLocalAddress()
 
     // Create the socket
     const SocketHandle sock = socket(PF_INET, SOCK_DGRAM, 0);
-    if (sock == priv::SocketImpl::invalidSocket())
+    if (sock == SocketImpl::invalidSocket())
     {
         err() << "Failed to retrieve local address (invalid socket)" << std::endl;
-        return std::nullopt;
+        return nonstd::nullopt;
     }
 
     // Connect the socket to a public ip (here 1.1.1.1) on any
     // port. This will give the local address of the network interface
     // used for default routing which is usually what we want.
-    sockaddr_in address = priv::SocketImpl::createAddress(0x01010101, 9);
+    sockaddr_in address = SocketImpl::createAddress(0x01010101, 9);
     if (connect(sock, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == -1)
     {
-        priv::SocketImpl::close(sock);
+        SocketImpl::close(sock);
 
         err() << "Failed to retrieve local address (socket connection failure)" << std::endl;
-        return std::nullopt;
+        return nonstd::nullopt;
     }
 
     // Get the local address of the socket connection
-    priv::SocketImpl::AddrLength size = sizeof(address);
+    SocketImpl::AddrLength size = sizeof(address);
     if (getsockname(sock, reinterpret_cast<sockaddr*>(&address), &size) == -1)
     {
-        priv::SocketImpl::close(sock);
+        SocketImpl::close(sock);
 
         err() << "Failed to retrieve local address (socket local address retrieval failure)" << std::endl;
-        return std::nullopt;
+        return nonstd::nullopt;
     }
 
     // Close the socket
-    priv::SocketImpl::close(sock);
+    SocketImpl::close(sock);
 
     // Finally build the IP address
     return IpAddress(ntohl(address.sin_addr.s_addr));
@@ -167,7 +250,7 @@ std::optional<IpAddress> IpAddress::getLocalAddress()
 
 
 ////////////////////////////////////////////////////////////
-std::optional<IpAddress> IpAddress::getPublicAddress(Time timeout)
+nonstd::optional<IpAddress> IpAddress::getPublicAddress(Time timeout)
 {
     // The trick here is more complicated, because the only way
     // to get our public IP address is to get it from a distant computer.
@@ -187,7 +270,7 @@ std::optional<IpAddress> IpAddress::getPublicAddress(Time timeout)
     err() << "Failed to retrieve public address from external IP resolution server (HTTP response status "
           << static_cast<int>(status) << ")" << std::endl;
 
-    return std::nullopt;
+    return nonstd::nullopt;
 }
 
 
@@ -234,7 +317,7 @@ bool operator>=(IpAddress left, IpAddress right)
 
 
 ////////////////////////////////////////////////////////////
-std::istream& operator>>(std::istream& stream, std::optional<IpAddress>& address)
+std::istream& operator>>(std::istream& stream, nonstd::optional<IpAddress>& address)
 {
     std::string str;
     stream >> str;

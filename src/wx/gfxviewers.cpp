@@ -11,12 +11,37 @@
 #include "wx/viewsupt.h"
 #include "wx/wxvbam.h"
 
+#if __STDC_WANT_SECURE_LIB__
+#define snprintf sprintf_s
+#endif
+
 namespace {
 void utilReadScreenPixels(uint8_t* dest, int w, int h) {
     uint8_t* b = dest;
     int sizeX = w;
     int sizeY = h;
     switch (systemColorDepth) {
+        case 8: {
+            uint8_t* p = (uint8_t*)(g_pix + (w + 2));  // skip first black line
+            for (int y = 0; y < sizeY; y++) {
+                for (int x = 0; x < sizeX; x++) {
+                    uint8_t v = *p++;
+
+                    // White color fix
+                    if (v == 0xff) {
+                        *b++ = 0xff;
+                        *b++ = 0xff;
+                        *b++ = 0xff;
+                    } else {
+                        *b++ = (((v >> 5) & 0x7) << 5);
+                        *b++ = (((v >> 2) & 0x7) << 5);
+                        *b++ = ((v & 0x3) << 6);
+                    }
+                }
+                p++;  // skip black pixel for filters
+                p++;  // skip black pixel for filters
+            }
+        } break;
         case 16: {
             uint16_t* p = (uint16_t*)(g_pix + (w + 2) * 2);  // skip first black line
             for (int y = 0; y < sizeY; y++) {
@@ -928,8 +953,9 @@ public:
 
                 for (int y = 0; y < sizeY; y++) {
                     for (int x = 0; x < sizeX; x++) {
-                        uint32_t color = g_vram[0x10000 + (((c + (y >> 3) * inc) * 32 + (y & 7) * 8 + (x >> 3) * 64 + (x & 7)) & 0x7FFF)];
+                        uint32_t color = g_vram[0x10000 + (((c + (((y >> 3) * inc) << 5) + ((y & 7) << 4) + ((x >> 3) << 6) + (x & 7))) & 0x7FFF)];
                         color = pal[color];
+
                         *bmp++ = (color & 0x1f) << 3;
                         *bmp++ = ((color >> 5) & 0x1f) << 3;
                         *bmp++ = ((color >> 10) & 0x1f) << 3;
@@ -950,7 +976,7 @@ public:
 
                 for (int y = 0; y < sizeY; y++) {
                     for (int x = 0; x < sizeX; x++) {
-                        uint32_t color = g_vram[0x10000 + (((c + (y >> 3) * inc) * 32 + (y & 7) * 4 + (x >> 3) * 32 + ((x & 7) >> 1)) & 0x7FFF)];
+                        uint32_t color = g_vram[0x10000 + ((((((c + (((y >> 3) * inc) << 5)) + ((y & 7) << 2)) + ((x >> 3) << 5)) + ((x & 7) >> 1))) & 0x7FFF)];
 
                         if (x & 1)
                             color >>= 4;
@@ -958,6 +984,7 @@ public:
                             color &= 0x0F;
 
                         color = pal[palette + color];
+
                         *bmp++ = (color & 0x1f) << 3;
                         *bmp++ = ((color >> 5) & 0x1f) << 3;
                         *bmp++ = ((color >> 10) & 0x1f) << 3;
@@ -1202,6 +1229,9 @@ void savepal(wxWindow* parent, const uint8_t* data, int ncols, const wxString ty
     wxFileDialog dlg(parent, _("Select output file and type"), pdir, def_name,
         _("Windows Palette (*.pal)|*.pal|PaintShop Palette (*.pal)|*.pal|Adobe Color Table (*.act)|*.act"),
         wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+    SetGenericPath(dlg, pdir);
+
     dlg.SetFilterIndex(ptype);
     int ret = dlg.ShowModal();
     ptype = dlg.GetFilterIndex();
@@ -1246,7 +1276,7 @@ void savepal(wxWindow* parent, const uint8_t* data, int ncols, const wxString ty
 
         for (int i = 0; i < ncols; i++, data += 3) {
             char buf[14];
-            int l = sprintf(buf, "%d %d %d\r\n", data[0], data[1], data[2]);
+            int l = snprintf(buf, sizeof(buf), "%d %d %d\r\n", data[0], data[1], data[2]);
             f.Write(buf, l);
         }
 
@@ -1661,6 +1691,9 @@ public:
 
         wxFileDialog dlg(GetGrandParent(), _("Select output file"), bmp_save_dir, def_name,
             _("PNG images|*.png|BMP images|*.bmp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+        SetGenericPath(dlg, bmp_save_dir);
+
         dlg.SetFilterIndex(capture_format);
         int ret = dlg.ShowModal();
         bmp_save_dir = dlg.GetDirectory();
@@ -1806,6 +1839,9 @@ public:
 
         wxFileDialog dlg(GetGrandParent(), _("Select output file"), bmp_save_dir, def_name,
             _("PNG images|*.png|BMP images|*.bmp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+        SetGenericPath(dlg, bmp_save_dir);
+
         dlg.SetFilterIndex(capture_format);
         int ret = dlg.ShowModal();
         bmp_save_dir = dlg.GetDirectory();

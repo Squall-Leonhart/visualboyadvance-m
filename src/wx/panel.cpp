@@ -1198,20 +1198,14 @@ void GameArea::OnIdle(wxIdleEvent& event)
     if (!panel) {
         switch (OPTION(kDispRenderMethod)) {
             case config::RenderMethod::kSimple:
-                no_border = false;
-
                 panel = new BasicDrawingPanel(this, basic_width, basic_height);
                 break;
             case config::RenderMethod::kSDL:
-                no_border = false;
-
                 panel = new SDLDrawingPanel(this, basic_width, basic_height);
                 break;
 #ifdef __WXMAC__
 #ifndef NO_METAL
             case config::RenderMethod::kMetal:
-                no_border = false;
-
                 if (is_macosx_1012_or_newer()) {
                     panel =
                     new MetalDrawingPanel(this, basic_width, basic_height);
@@ -1222,27 +1216,17 @@ void GameArea::OnIdle(wxIdleEvent& event)
                 break;
 #endif
             case config::RenderMethod::kQuartz2d:
-                no_border = false;
-
                 panel =
                     new Quartz2DDrawingPanel(this, basic_width, basic_height);
                 break;
 #endif
 #ifndef NO_OGL
             case config::RenderMethod::kOpenGL:
-                if (out_8) {
-                    no_border = true;
-                } else {
-                    no_border = false;
-                }
-
                 panel = new GLDrawingPanel(this, basic_width, basic_height);
                 break;
 #endif
 #if defined(__WXMSW__) && !defined(NO_D3D)
             case config::RenderMethod::kDirect3d:
-                no_border = false;
-
                 panel = new DXDrawingPanel(this, basic_width, basic_height);
                 break;
 #endif
@@ -1641,12 +1625,12 @@ public:
         const int procy = height_ * threadno_ / nthreads_;
         height_ = height_ * (threadno_ + 1) / nthreads_ - procy;
         const int inbpp = systemColorDepth >> 3;
-        const int inrb = out_8 ? 2 : out_16  ? 2
+        const int inrb = out_8 ? 4 : out_16  ? 2
                          : out_24 ? 0 : 1;
         const int instride = (width_ + inrb) * inbpp;
         const int instride32 = width_ * 4;
         const int outbpp = systemColorDepth >> 3;
-        const int outrb = out_8 ? 2 : out_24 ? 0 : 4;
+        const int outrb = out_8 ? 4 : out_24 ? 0 : 4;
         const int outstride = std::ceil(width_ * outbpp * scale_) + outrb;
         const int outstride32 = std::ceil(width_ * 4 * scale_);
         uint8_t *dest = NULL;
@@ -1709,7 +1693,7 @@ public:
                             pos++;
                             src_pos++;
                         }
-                        src_pos += 2;
+                        src_pos += 4;
                     }
                 } else if (out_16) {
                     uint16_t *src16_ = (uint16_t *)src_;
@@ -1762,7 +1746,7 @@ public:
                             pos++;
                             dst_pos += 4;
                         }
-                        pos += 2;
+                        pos += 4;
                     }
                 } else if (out_16) {
                     uint16_t *dest16_ = (uint16_t *)dest;
@@ -2004,7 +1988,7 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
     //   if filtering, this is filter output, retained for redraws
     //   if not filtering, we still retain current image for redraws
     int outbpp = systemColorDepth >> 3;
-    int outrb = out_8 ? 2 : out_24 ? 0 : 4;
+    int outrb = out_8 ? 4 : out_24 ? 0 : 4;
     int outstride = std::ceil(width * outbpp * scale) + outrb;
 
     if (!pixbuf2) {
@@ -2619,7 +2603,7 @@ void SDLDrawingPanel::DrawArea()
         DrawingPanelInit();
             
     if (out_8) {
-        srcPitch = std::ceil(width * scale) + 2;
+        srcPitch = std::ceil(width * scale) + 4;
     } else if (out_16) {
         srcPitch = std::ceil(width * scale * 2) + 4;
     } else if (out_24) {
@@ -2674,7 +2658,7 @@ void SDLDrawingPanel::DrawArea(uint8_t** data)
     //   if filtering, this is filter output, retained for redraws
     //   if not filtering, we still retain current image for redraws
     int outbpp = systemColorDepth >> 3;
-    int outrb = out_8 ? 2 : out_24 ? 0 : 4;
+    int outrb = out_8 ? 4 : out_24 ? 0 : 4;
     int outstride = std::ceil(width * outbpp * scale) + outrb;
             
     // FIXME: filters race condition?
@@ -2848,7 +2832,7 @@ void BasicDrawingPanel::DrawArea(wxWindowDC& dc)
     } else if (out_8) {
         // scaled by filters, top/right borders, transform to 24-bit
         im = new wxImage(std::ceil(width * scale), std::ceil(height * scale), false);
-        uint8_t* src = (uint8_t*)todraw + (int)std::ceil((width + 2) * scale); // skip top border
+        uint8_t* src = (uint8_t*)todraw + (int)std::ceil((width * scale) + 4); // skip top border
         uint8_t* dst = im->GetData();
                 
         for (int y = 0; y < std::ceil(height * scale); y++) {
@@ -2865,7 +2849,7 @@ void BasicDrawingPanel::DrawArea(wxWindowDC& dc)
                 }
             }
                     
-            src += 2;
+            src += 4;
         }
     } else if (out_16) {
         // scaled by filters, top/right borders, transform to 24-bit
@@ -3176,9 +3160,6 @@ void GLDrawingPanel::RefreshGL()
         
 void GLDrawingPanel::DrawArea(wxWindowDC& dc)
 {
-    uint8_t* src = NULL;
-    uint8_t* dst = NULL;
-            
     (void)dc; // unused params
     SetContext();
     RefreshGL();
@@ -3187,7 +3168,7 @@ void GLDrawingPanel::DrawArea(wxWindowDC& dc)
         DrawingPanelInit();
             
     if (todraw) {
-        int rowlen = std::ceil(width * scale) + (out_8 ? 0 : out_16 ? 2 : out_24 ? 0 : 1);
+        int rowlen = std::ceil(width * scale) + (out_8 ? 4 : out_16 ? 2 : out_24 ? 0 : 1);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, rowlen);
 #if wxBYTE_ORDER == wxBIG_ENDIAN
                 
@@ -3196,24 +3177,8 @@ void GLDrawingPanel::DrawArea(wxWindowDC& dc)
             glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
                 
 #endif
-        if (out_8) {
-            src = (uint8_t*)todraw + (int)std::ceil((width + 2) * ((systemColorDepth >> 3) * scale)); // skip top border
-            dst = (uint8_t*)todraw;
-                    
-            for (int y = 0; y < std::ceil(height * scale); y++) {
-                for (int x = 0; x < std::ceil(width * scale); x++) {
-                    *dst++ = *src++;
-                }
-                        
-                src += 2;
-            }
-                    
-            glTexImage2D(GL_TEXTURE_2D, 0, int_fmt, (int)std::ceil(width * scale), (int)std::ceil(height * scale),
-                            0, tex_fmt, todraw);
-        } else {
-            glTexImage2D(GL_TEXTURE_2D, 0, int_fmt, (int)std::ceil(width * scale), (int)std::ceil(height * scale),
-                            0, tex_fmt, todraw + (int)std::ceil(rowlen * ((systemColorDepth >> 3) * scale)));
-        }
+        glTexImage2D(GL_TEXTURE_2D, 0, int_fmt, (int)std::ceil(width * scale), (int)std::ceil(height * scale),
+                     0, tex_fmt, todraw + (int)std::ceil(rowlen * ((systemColorDepth >> 3) * scale)));
                 
         glCallList(vlist);
     } else
@@ -3539,7 +3504,7 @@ void MetalDrawingPanel::DrawArea(uint8_t** data)
     //   if filtering, this is filter output, retained for redraws
     //   if not filtering, we still retain current image for redraws
     int outbpp = systemColorDepth >> 3;
-    int outrb = out_8 ? 2 : out_24 ? 0 : 4;
+    int outrb = out_8 ? 4 : out_24 ? 0 : 4;
     int outstride = std::ceil(width * outbpp * scale) + outrb;
             
     // FIXME: filters race condition?

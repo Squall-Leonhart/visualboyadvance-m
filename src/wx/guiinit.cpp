@@ -1830,20 +1830,20 @@ bool MainFrame::BindControls()
         // remove this item from the menu completely
         wxMenuItem* gdbmi = XRCITEM("GDBMenu");
         gdbmi->GetMenu()->Remove(gdbmi);
-        gdbmi = nullptr;
+        gdbmi = NULL;
 #endif  // !defined(VBAM_ENABLE_DEBUGGER)
 #ifdef NO_LINK
         // remove this item from the menu completely
         wxMenuItem* linkmi = XRCITEM("LinkMenu");
         linkmi->GetMenu()->Remove(linkmi);
-        linkmi = nullptr;
+        linkmi = NULL;
 #endif
 
 #ifdef __WXMAC__
         // Remove hide menubar in the UI Config submenu on macOS, because it is meaningless there.
         wxMenuItem* hide_menu_bar = XRCITEM("HideMenuBar");
         hide_menu_bar->GetMenu()->Remove(hide_menu_bar);
-        hide_menu_bar = nullptr;
+        hide_menu_bar = NULL;
 #endif
 
         // if a recent menu is present, save its location
@@ -1925,7 +1925,6 @@ bool MainFrame::BindControls()
         MenuOptionIntRadioValue("Language1", OPTION(kLocale), wxLANGUAGE_BULGARIAN);
         MenuOptionIntRadioValue("Language2", OPTION(kLocale), wxLANGUAGE_BRETON);
         MenuOptionIntRadioValue("Language3", OPTION(kLocale), wxLANGUAGE_CZECH);
-        MenuOptionIntRadioValue("Language4", OPTION(kLocale), wxLANGUAGE_GERMAN);
         MenuOptionIntRadioValue("Language5", OPTION(kLocale), wxLANGUAGE_GREEK);
         MenuOptionIntRadioValue("Language6", OPTION(kLocale), wxLANGUAGE_ENGLISH_US);
         MenuOptionIntRadioValue("Language7", OPTION(kLocale), wxLANGUAGE_SPANISH_LATIN_AMERICA);

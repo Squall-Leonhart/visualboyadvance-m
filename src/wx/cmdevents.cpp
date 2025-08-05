@@ -58,7 +58,7 @@ void RefreshFrame(void)
     if (wxGetApp().frame)
         wxGetApp().frame->Destroy();
 
-    wxGetApp().frame = wxDynamicCast(xr->LoadFrame(nullptr, "MainFrame"), MainFrame);
+    wxGetApp().frame = wxDynamicCast(xr->LoadFrame(NULL, "MainFrame"), MainFrame);
     if (!wxGetApp().frame) {
         wxLogError(_("Could not create main window"));
         return;
@@ -2330,7 +2330,7 @@ EVT_HANDLER(UpdateEmu, "Check for updates...")
 EVT_HANDLER(FactoryReset, "Factory Reset...")
 {
     wxMessageDialog dlg(
-        nullptr, _("YOUR CONFIGURATION WILL BE DELETED!\n\nAre you sure?"),
+        NULL, _("YOUR CONFIGURATION WILL BE DELETED!\n\nAre you sure?"),
         _("FACTORY RESET"), wxYES_NO | wxNO_DEFAULT | wxCENTRE);
 
     if (dlg.ShowModal() == wxID_YES) {
@@ -2795,26 +2795,6 @@ EVT_HANDLER(Language3, "Czech")
 #endif
 
     wxvbam_locale->AddCatalog("wxvbam", wxLANGUAGE_CZECH);
-
-    update_opts();
-    RefreshFrame();
-}
-
-EVT_HANDLER(Language4, "German")
-{
-    OPTION(kLocale) = wxLANGUAGE_GERMAN;
-
-    if (wxvbam_locale != NULL)
-        wxDELETE(wxvbam_locale);
-
-    wxvbam_locale = new wxLocale;
-    wxvbam_locale->Init(OPTION(kLocale), wxLOCALE_LOAD_DEFAULT);
-
-#ifdef _WIN32
-    wxTranslations::Get()->SetLoader(new wxResourceTranslationsLoader);
-#endif
-
-    wxvbam_locale->AddCatalog("wxvbam", wxLANGUAGE_GERMAN);
 
     update_opts();
     RefreshFrame();

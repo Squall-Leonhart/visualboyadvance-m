@@ -2379,7 +2379,6 @@ int main(int argc, char** argv)
     gbafilter_update_colors();
     gbcfilter_update_colors();
 
-
     if (delta == NULL) {
         delta = (uint8_t*)malloc(delta_size);
         memset(delta, 255, delta_size);

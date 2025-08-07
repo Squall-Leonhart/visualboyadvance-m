@@ -47,11 +47,11 @@ static const float GBC_Rec2020[4][4] = {
     {0.0f,   0.0f,   0.0f,    1.0f}
 };
 
-// Screen darkening factor. Default to 0.0f.
+// Screen lightening factor. Default to 0.0f.
 static float lighten_screen = 0.0f;
 
-// Color mode (1 for sRGB, 2 for DCI, 3 for Rec2020). Default to sRGB (1).
-static int color_mode = 1;
+// Color mode (0 for sRGB, 1 for DCI, 2 for Rec2020). Default to sRGB (0).
+static int color_mode = 0;
 
 // Pointer to the currently selected color profile matrix.
 static const float (*profile)[4];
@@ -77,13 +77,13 @@ static GbcfilterInitializer __gbcfilter_initializer;
 
 // Helper function to set the 'profile' pointer based on the 'color_mode' variable.
 static void set_profile_from_mode() {
-    if (color_mode == 1) {
+    if (color_mode == 0) {
         profile = GBC_sRGB;
     }
-    else if (color_mode == 2) {
+    else if (color_mode == 1) {
         profile = GBC_DCI;
     }
-    else if (color_mode == 3) {
+    else if (color_mode == 2) {
         profile = GBC_Rec2020;
     }
     else {
@@ -109,6 +109,8 @@ void gbcfilter_update_colors(bool lcd) {
                 ((((i & 0x3e0) >> 5) << 0) & 0x1C) |
                 ((((i & 0x7c00) >> 10) >> 3) & 0x3));
         }
+        if (lcd)
+            gbcfilter_pal8(systemColorMap8, 0x10000);
     } break;
     case 16: {
         for (int i = 0x0; i < 0x10000; i++) {
@@ -132,6 +134,67 @@ void gbcfilter_update_colors(bool lcd) {
     }
 }
 
+void gbcfilter_pal8(uint8_t* buf, int count)
+{
+    // Pre-calculate constants for efficiency within function scope
+    const float target_gamma_exponent = target_gamma + (lighten_screen * -1.0f);
+    const float display_gamma_reciprocal = 1.0f / display_gamma;
+    const float luminance_factor = profile[3][3]; // profile[3].w from GLSL
+
+    while (count--) {
+        uint8_t pix = *buf;
+
+        uint8_t original_r_val_3bit = (uint8_t)((pix & 0xE0) >> 5);
+        uint8_t original_g_val_3bit = (uint8_t)((pix & 0x1C) >> 2);
+        uint8_t original_b_val_2bit = (uint8_t)(pix & 0x3);
+
+        // Normalize to 0.0-1.0 for calculations
+        float r = (float)original_r_val_3bit / 7.0f;
+        float g = (float)original_g_val_3bit / 7.0f;
+        float b = (float)original_b_val_2bit / 3.0f;
+
+        // 1. Apply initial gamma (including lighten_screen as exponent) to convert to linear space.
+        // This step will affect non-"white" values.
+        r = powf(r, target_gamma_exponent);
+        g = powf(g, target_gamma_exponent);
+        b = powf(b, target_gamma_exponent);
+
+        // 2. Apply luminance factor and clamp.
+        r = fmaxf(0.0f, fminf(1.0f, r * luminance_factor));
+        g = fmaxf(0.0f, fminf(1.0f, g * luminance_factor));
+        b = fmaxf(0.0f, fminf(1.0f, b * luminance_factor));
+
+        // 3. Apply color profile matrix (using profile[column][row] access)
+        float transformed_r = profile[0][0] * r + profile[1][0] * g + profile[2][0] * b;
+        float transformed_g = profile[0][1] * r + profile[1][1] * g + profile[2][1] * b;
+        float transformed_b = profile[0][2] * r + profile[1][2] * g + profile[2][2] * b;
+
+        // 4. Apply display gamma to convert back for display.
+        transformed_r = copysignf(powf(fabsf(transformed_r), display_gamma_reciprocal), transformed_r);
+        transformed_g = copysignf(powf(fabsf(transformed_g), display_gamma_reciprocal), transformed_g);
+        transformed_b = copysignf(powf(fabsf(transformed_b), display_gamma_reciprocal), transformed_b);
+
+        // Final clamp: ensure values are within 0.0-1.0 range
+        transformed_r = fmaxf(0.0f, fminf(1.0f, transformed_r));
+        transformed_g = fmaxf(0.0f, fminf(1.0f, transformed_g));
+        transformed_b = fmaxf(0.0f, fminf(1.0f, transformed_b));
+
+        // Convert back to 3-bit or 2-bit (0-7 or 0-3) integer and combine into uint8_t
+        // Apply 3-bit or 2-bit to 8-bit conversion, as this palette is for 8-bit output.
+        uint8_t final_red = (uint8_t)(transformed_r * 7.0f + 0.5f);
+        uint8_t final_green = (uint8_t)(transformed_g * 7.0f + 0.5f);
+        uint8_t final_blue = (uint8_t)(transformed_b * 3.0f + 0.5f);
+
+        // Ensure values are strictly within 0-7 or 0-3 range after rounding
+        if (final_red > 7) final_red = 7;
+        if (final_green > 7) final_green = 7;
+        if (final_blue > 3) final_blue = 3;
+
+        *buf++ = ((final_red & 0x7) << 5) |
+            ((final_green & 0x7) << 2) |
+            (final_blue & 0x3);
+    }
+}
 void gbcfilter_pal(uint16_t* buf, int count)
 {
     // Pre-calculate constants for efficiency within function scope

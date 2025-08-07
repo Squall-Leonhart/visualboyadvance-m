@@ -176,7 +176,7 @@ GameArea::GameArea()
       gb_declick_observer_(
           config::OptionID::kSoundGBDeclicking,
           [&](config::Option* option) { gbSoundSetDeclicking(option->GetBool()); }),
-      lcd_filters_observer_({config::OptionID::kGBLCDFilter, config::OptionID::kGBALCDFilter},
+      lcd_filters_observer_({config::OptionID::kGBLCDFilter, config::OptionID::kGBADarken, config::OptionID::kGBLighten, config::OptionID::kDispColorCorrectionProfile, config::OptionID::kGBALCDFilter},
                             std::bind(&GameArea::UpdateLcdFilter, this)),
       audio_rate_observer_(config::OptionID::kSoundAudioRate,
                            std::bind(&GameArea::OnAudioRateChanged, this)),
@@ -3421,11 +3421,35 @@ void GameArea::OnGBBorderChanged(config::Option* option) {
 }
         
 void GameArea::UpdateLcdFilter() {
-    if (loaded == IMAGE_GBA)
+    int DCCP = 0;
+
+    switch (OPTION(kDispColorCorrectionProfile)) {
+        case config::ColorCorrectionProfile::kSRGB:
+            DCCP = 0;
+            break;
+
+        case config::ColorCorrectionProfile::kDCI:
+            DCCP = 1;
+            break;
+
+        case config::ColorCorrectionProfile::kRec2020:
+            DCCP = 2;
+            break;
+
+        case config::ColorCorrectionProfile::kLast:
+            DCCP = 0;
+            break;
+    }
+
+    if (loaded == IMAGE_GBA) {
+        gbafilter_set_params(DCCP, (((float)OPTION(kGBADarken)) / 100));
         gbafilter_update_colors(OPTION(kGBALCDFilter));
-     else if (loaded == IMAGE_GB)
+    } else if (loaded == IMAGE_GB) {
+        gbcfilter_set_params(DCCP, (((float)OPTION(kGBLighten)) / 100));
         gbcfilter_update_colors(OPTION(kGBLCDFilter));
-     else { 
+    } else {
+        gbafilter_set_params(DCCP, (((float)OPTION(kGBADarken)) / 100));
+        gbcfilter_set_params(DCCP, (((float)OPTION(kGBLighten)) / 100));
         gbafilter_update_colors(false);
         gbcfilter_update_colors(false);
     }

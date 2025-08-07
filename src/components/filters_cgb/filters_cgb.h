@@ -4,6 +4,7 @@
 #include <cstdint>
 
 void gbcfilter_update_colors(bool lcd = false);
+void gbcfilter_pal8(uint8_t* buf, int count);
 void gbcfilter_pal(uint16_t* buf, int count);
 void gbcfilter_pal32(uint32_t* buf, int count);
 void gbcfilter_pad(uint8_t* buf, int count);
